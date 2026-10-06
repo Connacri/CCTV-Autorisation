@@ -667,7 +667,7 @@ export default function App() {
                   <select
                     value={values['p1_wilaya'] || 'ولاية وهران'}
                     onChange={(e) => handleUpdateValue('p1_wilaya', e.target.value)}
-                    className="flex-1 min-w-0 border border-emerald-300 bg-white text-slate-900 rounded-md px-2.5 py-1.5 font-cairo font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    className="flex-1 min-w-0 border border-emerald-300 bg-white text-slate-900 rounded-md px-2.5 py-1.5 font-amiri font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   >
                     {catalogItems
                       .filter((c) => c.categoryKey === 'wilaya')
@@ -1153,7 +1153,11 @@ export default function App() {
                         </span>
                         <label
                           dir="rtl"
-                          className="font-cairo font-bold text-sm text-slate-900 whitespace-nowrap shrink-0"
+                          className={`${
+                            field.syncKey === 'wilaya_header'
+                              ? 'font-amiri'
+                              : 'font-cairo'
+                          } font-bold text-sm text-slate-900 whitespace-nowrap shrink-0`}
                         >
                           {field.labelAr}
                         </label>
@@ -1170,7 +1174,11 @@ export default function App() {
                                   handleUpdateValue(field.id, e.target.value);
                                 }
                               }}
-                              className="flex-1 min-w-0 text-xs border border-emerald-200 bg-emerald-50/50 text-slate-800 rounded-md px-2.5 py-1.5 font-cairo font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                              className={`flex-1 min-w-0 text-xs border border-emerald-200 bg-emerald-50/50 text-slate-800 rounded-md px-2.5 py-1.5 ${
+                                field.syncKey === 'wilaya_header'
+                                  ? 'font-amiri font-bold text-sm'
+                                  : 'font-cairo font-semibold'
+                              } focus:outline-none focus:ring-2 focus:ring-emerald-600`}
                             >
                               <option value="">
                                 ▾ {t.chooseFromObjectBox} ({fieldChoices.length})
@@ -1232,7 +1240,11 @@ export default function App() {
                           onFocus={() => setActiveFieldId(field.id)}
                           onChange={(e) => handleUpdateValue(field.id, e.target.value)}
                           placeholder={field.placeholderAr}
-                          className="w-full px-3 py-1.5 text-sm font-cairo font-semibold text-center text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          className={`w-full px-3 py-1.5 text-sm ${
+                            field.syncKey === 'wilaya_header'
+                              ? 'font-amiri font-bold text-base'
+                              : 'font-cairo font-semibold'
+                          } text-center text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600`}
                         />
                       )}
 

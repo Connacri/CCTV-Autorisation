@@ -212,7 +212,12 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
                       color: options.inkColor,
                     }}
                     className={`w-full h-full px-1 bg-white/95 leading-none focus:outline-none ${
-                      field.id === 'p3_ref_number' || field.id === 'p3_ref_year'
+                      field.id === 'p3_ref_number' ||
+                      field.id === 'p3_ref_year' ||
+                      field.syncKey === 'wilaya_header' ||
+                      field.id === 'p1_wilaya' ||
+                      field.id === 'p2_wilaya' ||
+                      field.id === 'p3_wilaya'
                         ? 'font-amiri font-bold'
                         : 'font-cairo font-semibold'
                     }`}

@@ -150,8 +150,22 @@ export async function exportFilledPdf(params: {
       drawOfficialPageBackground(ctx, pageNum, canvasW, canvasH);
     }
 
-    // 2. Render Page 3 reference line ("رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020") in original Amiri font
+    // 2. Render Page 3 un-underlined Republic header and reference line ("رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020") in original Amiri font
     if (pageNum === 3) {
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px(10.0), py(1.2), px(80.0), py(3.4));
+      ctx.fillStyle = '#0f172a';
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${fs(14.5)}px "Amiri", "Cairo", serif`;
+      ctx.fillText(
+        'الجمهوريـــــــــــــة الجزائريـــــــــــــة الديمقراطيـــــــــــــة الشعبيـــــــــــــة',
+        px(49.5),
+        py(3.8)
+      );
+      ctx.restore();
+
       drawPage3ReferenceLine(ctx, canvasW, canvasH, schemaFields, values, {
         ...options,
         showFieldBoxes: false,
@@ -196,12 +210,24 @@ export async function exportFilledPdf(params: {
     );
 
     for (const field of pageFields) {
-      const rawVal = values[field.id] || '';
+      const isWilayaHeader =
+        field.syncKey === 'wilaya_header' ||
+        field.id === 'p1_wilaya' ||
+        field.id === 'p2_wilaya' ||
+        field.id === 'p3_wilaya';
+      const rawVal =
+        values[field.id] !== undefined && values[field.id].trim() !== ''
+          ? values[field.id]
+          : isWilayaHeader
+          ? values['p1_wilaya'] || 'ولاية وهران'
+          : '';
       const xL = px(field.xLeft + options.globalOffsetX);
       const xR = px(field.xRight + options.globalOffsetX);
       const yBase = py(field.y + options.globalOffsetY);
       const boxWidth = Math.max(20, xR - xL);
-      const scaledPt = field.fontSize * options.fontSizeScale;
+      const scaledPt = isWilayaHeader
+        ? field.fontSize
+        : field.fontSize * options.fontSizeScale;
       const fontPx = fs(scaledPt);
 
       if (field.maskBackground) {
@@ -213,9 +239,13 @@ export async function exportFilledPdf(params: {
 
       if (!rawVal.trim()) continue;
 
+      const headerWeight = field.page === 3 ? '700' : '400';
+
       ctx.save();
-      ctx.fillStyle = options.inkColor;
-      ctx.font = `${options.fontWeight} ${fontPx}px "Cairo", sans-serif`;
+      ctx.fillStyle = isWilayaHeader ? '#0f172a' : options.inkColor;
+      ctx.font = isWilayaHeader
+        ? `${headerWeight} ${fontPx}px "Amiri", "Cairo", serif`
+        : `${options.fontWeight} ${fontPx}px "Cairo", sans-serif`;
       ctx.direction = field.dir;
 
       let anchorX = xR;
