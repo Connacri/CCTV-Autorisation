@@ -42,10 +42,31 @@ npm run lint
 npm run dev
 ```
 
+## Application Android (Flutter)
+
+Le projet Flutter Android est commité dans [`flutter_app/`](flutter_app/) (sources Dart dans `flutter_app/lib`, hôte Android dans `flutter_app/android`, asset PDF + polices Cairo dans `flutter_app/assets`).
+
+```bash
+cd flutter_app
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs  # régénère lib/objectbox.g.dart
+flutter analyze lib
+flutter build apk --debug   # développement local uniquement
+```
+
+Les sources Dart sont régénérables depuis l'application Web via :
+
+```bash
+npx tsx scripts/extract-flutter.mts
+```
+
+La signature de production est assurée **uniquement** par GitHub Actions (secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`).
+
+
 ## CI/CD & Releases Versionnées (GitHub Actions)
 
 Le fichier `.github/workflows/release.yml` exécute automatiquement à chaque push sur `main` ou tag `v*.*.*` :
 1. Vérification TypeScript (`npm run lint`) et build Web (`npm run build`).
 2. Déploiement automatique sur **GitHub Pages** (incluant `/privacy.html`).
-3. Compilation et signature Android (`app-release.apk` et `app-release.aab`) via les secrets GitHub (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`).
+3. Compilation et signature Android (`app-release.apk` et `app-release.aab`) du projet commité `flutter_app/` via les secrets GitHub (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`), avec vérification apksigner.
 4. Publication d'une **Release GitHub versionnée (`v1.0.x`)** avec `web-build.zip`, `app-release.apk` et `app-release.aab`.

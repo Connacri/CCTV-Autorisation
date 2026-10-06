@@ -6,3 +6,15 @@ coverage/
 *.log
 .env*
 !.env.example
+
+.idea/
+flutter_app/build/
+flutter_app/.dart_tool/
+
+flutter_app/android/key.properties
+
+flutter_app/android/app/keystores/
+
+flutter_app/android/local.properties
+
+flutter_app/android/app/release-keystore.jks

@@ -1,0 +1,114 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:6911768874964897874",
+      "lastPropertyId": "4:7558930253291543801",
+      "name": "ChoiceCatalogItemEntity",
+      "properties": [
+        {
+          "id": "1:5021697592155729798",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:521812086996054153",
+          "name": "categoryKey",
+          "indexId": "1:2586203854262691341",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:4229299553868808104",
+          "name": "valueAr",
+          "type": 9
+        },
+        {
+          "id": "4:7558930253291543801",
+          "name": "noteFr",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:7431668201049795761",
+      "lastPropertyId": "10:4171148562112665394",
+      "name": "DossierSubmissionEntity",
+      "properties": [
+        {
+          "id": "1:3712843670694365510",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:9209134794721521837",
+          "name": "wilaya",
+          "indexId": "2:2983722617607919945",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:5919673865889978343",
+          "name": "applicantName",
+          "indexId": "3:4456994138045653281",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:7503585546776980494",
+          "name": "companyName",
+          "type": 9
+        },
+        {
+          "id": "5:5284894193070665610",
+          "name": "installationAddress",
+          "type": 9
+        },
+        {
+          "id": "6:3632987122716650437",
+          "name": "installerCompany",
+          "type": 9
+        },
+        {
+          "id": "7:6578146487429737219",
+          "name": "totalQty",
+          "type": 9
+        },
+        {
+          "id": "8:3963102727586332301",
+          "name": "strikeExternalMarket",
+          "type": 1
+        },
+        {
+          "id": "9:5547405669485174389",
+          "name": "fieldsJson",
+          "type": 9
+        },
+        {
+          "id": "10:4171148562112665394",
+          "name": "updatedAt",
+          "indexId": "4:8231009174002444483",
+          "type": 10,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "2:7431668201049795761",
+  "lastIndexId": "4:8231009174002444483",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

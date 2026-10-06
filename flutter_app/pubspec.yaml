@@ -1,0 +1,36 @@
+name: oran_drag_pdf_objectbox
+description: Application Flutter (Web, Android, iOS, Desktop) avec ObjectBox (Historique Lazy List + 15 Listes CRUD dont 69 Wilayas) et remplissage PDF Arabe en police Cairo.
+publish_to: 'none'
+version: 1.2.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Base de données locale ultra-rapide ObjectBox (Historique Lazy List + Listes de choix CRUD)
+  objectbox: ^5.3.2
+  objectbox_flutter_libs: ^5.3.2
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  # Écriture directe sur le PDF officiel sans modifier sa structure
+  syncfusion_flutter_pdf: ^27.1.58
+  # Aperçu et impression multiplateforme
+  printing: ^5.13.4
+  # Police Cairo pour l'interface et le rendu PDF Arabe RTL
+  google_fonts: ^6.2.1
+  file_picker: ^8.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.15.1
+  objectbox_generator: ^5.3.2
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/formulaire_oran.pdf
+    - assets/fonts/Cairo-Regular.ttf
+    - assets/fonts/Cairo-SemiBold.ttf

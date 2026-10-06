@@ -15,8 +15,8 @@ dependencies:
   flutter:
     sdk: flutter
   # Base de données locale ultra-rapide ObjectBox (Historique Lazy List + Listes de choix CRUD)
-  objectbox: ^4.0.3
-  objectbox_flutter_libs: ^4.0.3
+  objectbox: ^5.3.2
+  objectbox_flutter_libs: ^5.3.2
   path_provider: ^2.1.5
   path: ^1.9.0
   # Écriture directe sur le PDF officiel sans modifier sa structure
@@ -30,8 +30,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  build_runner: ^2.4.13
-  objectbox_generator: ^4.0.3
+  build_runner: ^2.15.1
+  objectbox_generator: ^5.3.2
 
 flutter:
   uses-material-design: true
@@ -193,10 +193,9 @@ export function generateFlutterObjectBoxEntities(
     .join(',\n');
 
   return `import 'dart:convert';
-import 'package:objectbox/objectbox.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'objectbox.g.dart'; // Généré par : dart run build_runner build
+import '../objectbox.g.dart'; // Généré par : dart run build_runner build
 
 /// Entité ObjectBox 1 : Historique complet de chaque dossier PDF rempli
 @Entity()

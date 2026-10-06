@@ -106,6 +106,9 @@ jobs:
   build-android:
     name: Build & Sign Android Release (APK & AAB)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -122,18 +125,8 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Prepare Flutter Android Project
-        run: |
-          if [ ! -f "pubspec.yaml" ]; then
-            flutter create --platforms=android --org dz.gov.wilaya.drag --project-name oran_drag_pdf_objectbox flutter_android_app
-            cd flutter_android_app
-            flutter pub add google_fonts syncfusion_flutter_pdf printing file_picker shared_preferences
-          else
-            mkdir -p flutter_android_app
-            cp -r . flutter_android_app/ || true
-            cd flutter_android_app
-            flutter pub get
-          fi
+      - name: Verify native Android host
+        run: test -f android/app/build.gradle.kts
 
       - name: Reconstruct temporary Android Keystore from GitHub Secrets (AGENTS.md §14)
         env:
@@ -142,31 +135,53 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          cd flutter_android_app
+          mkdir -p android/app/keystores
           if [ -n "${KEYSTORE_BASE64}" ]; then
-            mkdir -p android/app
-            echo "${KEYSTORE_BASE64}" | base64 --decode > android/app/release-keystore.jks
-            cat <<EOF > android/key.properties
+            echo "${KEYSTORE_BASE64}" | base64 --decode > android/app/keystores/release.jks
+            cat > android/key.properties << EOF
           storePassword=${KEYSTORE_PASSWORD}
           keyPassword=${KEY_PASSWORD}
           keyAlias=${KEY_ALIAS}
-          storeFile=release-keystore.jks
+          storeFile=keystores/release.jks
           EOF
+            echo "Signing keystore configured from GitHub Secrets."
+          else
+            echo "::warning::No KEYSTORE_BASE64 secret found; release build will fall back to the debug keystore."
           fi
+
+      - name: Install dependencies
+        run: |
+          chmod +x android/gradlew
+          flutter pub get
+
+      - name: Regenerate ObjectBox code (if needed)
+        run: |
+          if [ ! -f lib/objectbox.g.dart ] || [ lib/models/objectbox_entities.dart -nt lib/objectbox.g.dart ]; then
+            dart run build_runner build --delete-conflicting-outputs
+          else
+            echo "ObjectBox generated code is up to date."
+          fi
+
+      - name: Static analysis
+        run: flutter analyze lib
 
       - name: Build Android Release APK & AppBundle (AAB)
         run: |
-          cd flutter_android_app
           flutter build apk --release
           flutter build appbundle --release
           cp build/app/outputs/flutter-apk/app-release.apk ../app-release.apk
           cp build/app/outputs/bundle/release/app-release.aab ../app-release.aab
           ls -lh ../app-release.apk ../app-release.aab
 
+      - name: Verify APK signing
+        run: |
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --print-certs ../app-release.apk | head -5 || true
+
       - name: Remove temporary sensitive keystore files (AGENTS.md §14)
         if: always()
         run: |
-          rm -f flutter_android_app/android/app/release-keystore.jks flutter_android_app/android/key.properties
+          rm -f android/app/keystores/release.jks android/key.properties
 
       - name: Upload Android Release Artifacts (APK + AAB)
         uses: actions/upload-artifact@v4
