@@ -1,4 +1,4 @@
-package dz.gov.wilaya.drag.oran_drag_pdf_objectbox
+package com.cctv.dz
 
 import io.flutter.embedding.android.FlutterActivity
 
