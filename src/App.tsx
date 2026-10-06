@@ -1002,9 +1002,59 @@ export default function App() {
                 </div>
               )}
 
+              {/* Dedicated Inline Editor for Page 3 Reference Line: رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020 */}
+              {selectedPage === 3 && (
+                <div className="p-3 rounded-lg border border-emerald-300 bg-white space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2 flex-nowrap">
+                    <span className="text-xs font-semibold text-slate-700 truncate">
+                      N° & Année d’enregistrement (Même ligne sur le PDF)
+                    </span>
+                    <span
+                      dir="rtl"
+                      className="font-cairo font-bold text-sm text-emerald-950 whitespace-nowrap shrink-0"
+                    >
+                      المرجع الإداري (رقم / 142 ... / 2020)
+                    </span>
+                  </div>
+
+                  <div
+                    dir="rtl"
+                    className="flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-md bg-slate-50 border border-slate-200 font-cairo font-bold text-xs sm:text-sm text-slate-900 overflow-x-auto whitespace-nowrap"
+                  >
+                    <span className="shrink-0">رقم /</span>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={values['p3_ref_number'] ?? ''}
+                      onFocus={() => setActiveFieldId('p3_ref_number')}
+                      onChange={(e) => handleUpdateValue('p3_ref_number', e.target.value)}
+                      placeholder="142"
+                      aria-label="Numéro d'enregistrement (ex: 142)"
+                      className="w-16 px-2 py-1 text-center font-cairo font-bold text-sm text-emerald-900 bg-white border border-emerald-400 rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
+                    />
+                    <span className="shrink-0">م ت ش ع / م ت ع / م ت ا م م /</span>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={values['p3_ref_year'] !== undefined ? values['p3_ref_year'] : '2020'}
+                      onFocus={() => setActiveFieldId('p3_ref_year')}
+                      onChange={(e) => handleUpdateValue('p3_ref_year', e.target.value)}
+                      placeholder="2020"
+                      aria-label="Année d'enregistrement (ex: 2020)"
+                      className="w-20 px-2 py-1 text-center font-cairo font-bold text-sm text-emerald-900 bg-white border border-emerald-400 rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
+                    />
+                  </div>
+                </div>
+              )}
+
               {currentPageFields.map((field, index) => {
                 const isSelected = activeFieldId === field.id;
-                const val = values[field.id] || '';
+                const val =
+                  values[field.id] !== undefined
+                    ? values[field.id]
+                    : field.id === 'p3_ref_year'
+                    ? '2020'
+                    : '';
                 const prevSection = index > 0 ? currentPageFields[index - 1].section : null;
                 const showSectionHeader = field.section !== prevSection;
 
@@ -1020,16 +1070,16 @@ export default function App() {
                 return (
                   <React.Fragment key={field.id}>
                     {showSectionHeader && (
-                      <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between">
+                      <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between gap-2 flex-nowrap">
+                        <span className="text-[11px] text-slate-400 whitespace-nowrap shrink-0">
+                          Police Cairo · {field.dir.toUpperCase()}
+                        </span>
                         <h2
                           dir="rtl"
-                          className="font-cairo font-bold text-xs text-emerald-800"
+                          className="font-cairo font-bold text-xs text-emerald-800 truncate"
                         >
                           {field.section}
                         </h2>
-                        <span className="text-[11px] text-slate-400">
-                          Police Cairo · {field.dir.toUpperCase()}
-                        </span>
                       </div>
                     )}
 
@@ -1044,13 +1094,13 @@ export default function App() {
                           : 'border-slate-200 bg-white hover:border-slate-300'
                       }`}
                     >
-                      <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                        <span className="text-xs font-medium text-slate-600">
+                      <div className="flex items-center justify-between gap-2 mb-1.5 flex-nowrap">
+                        <span className="text-xs font-medium text-slate-600 truncate">
                           {field.labelFr}
                         </span>
                         <label
                           dir="rtl"
-                          className="font-cairo font-bold text-sm text-slate-900"
+                          className="font-cairo font-bold text-sm text-slate-900 whitespace-nowrap shrink-0"
                         >
                           {field.labelAr}
                         </label>

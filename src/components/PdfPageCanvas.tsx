@@ -152,7 +152,12 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
             ? field.y + options.globalOffsetY - 1.3
             : field.y + options.globalOffsetY - 1.85;
 
-          const val = values[field.id] || '';
+          const val =
+            values[field.id] !== undefined
+              ? values[field.id]
+              : field.id === 'p3_ref_year'
+              ? '2020'
+              : '';
           const scaledFontSizePx = Math.max(
             9,
             field.fontSize * options.fontSizeScale * zoom * 0.96
