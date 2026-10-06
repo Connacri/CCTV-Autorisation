@@ -300,23 +300,23 @@ export default function App() {
   const totalFilledCount = fields.filter((f) => (values[f.id] || '').trim().length > 0).length;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      {/* Top Navigation Bar following strict 3-Zone Contract */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200 sticky top-0 z-30">
-        {/* Zone 1: Single text element Brand Wordmark */}
+    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden flex flex-col bg-slate-50 text-slate-900">
+      {/* Top Navigation Bar — Responsive across Mobile, Tablet, and Desktop */}
+      <header className="w-full max-w-full flex items-center justify-between gap-2 px-3 sm:px-6 py-2.5 sm:py-3.5 bg-white border-b border-slate-200 sticky top-0 z-30">
+        {/* Zone 1: Brand Wordmark with mobile truncation */}
         <a
           href="#top"
           onClick={(e) => {
             e.preventDefault();
             setActiveTab('workspace');
           }}
-          className="text-sm sm:text-base font-bold tracking-tight text-slate-900 whitespace-nowrap"
+          className="min-w-0 flex-1 xl:flex-initial truncate text-xs sm:text-base font-bold tracking-tight text-slate-900"
         >
           {t.brandTitle}
         </a>
 
-        {/* Zone 2: 5 Clean single-line navigation links */}
-        <nav className="hidden xl:flex items-center gap-5 text-xs font-medium text-slate-600">
+        {/* Zone 2: Desktop Navigation Links */}
+        <nav className="hidden xl:flex items-center gap-5 text-xs font-medium text-slate-600 shrink-0">
           <button
             onClick={() => setActiveTab('workspace')}
             className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
@@ -389,12 +389,12 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Zone 3: Primary Actions */}
-        <div className="flex items-center gap-2">
+        {/* Zone 3: Primary Actions (Compact on Mobile) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* FR / EN Language Switcher */}
           <button
             onClick={() => setLocale((l) => (l === 'fr' ? 'en' : 'fr'))}
-            className="px-2.5 py-1.5 text-xs font-mono-tabular font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors uppercase whitespace-nowrap"
+            className="px-2 py-1.5 text-xs font-mono-tabular font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors uppercase whitespace-nowrap"
             title="Switch Language FR / EN"
           >
             {locale}
@@ -409,10 +409,11 @@ export default function App() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
+            title={originalPdfName ? t.changeOriginalPdf : t.uploadOriginalPdf}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>
+            <Upload className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden md:inline">
               {originalPdfName ? t.changeOriginalPdf : t.uploadOriginalPdf}
             </span>
           </button>
@@ -422,87 +423,90 @@ export default function App() {
             disabled={isExporting}
             aria-label="Exporter en PDF"
             title="Exporter en PDF (jsPDF + pdfSchema.ts)"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 shrink-0" />
             <span>{isExporting ? t.exportingPdf : t.downloadFilledPdf}</span>
           </button>
         </div>
       </header>
 
-      {/* Responsive Tablet / Mobile Navigation Bar */}
-      <div className="flex xl:hidden items-center gap-1 overflow-x-auto bg-white border-b border-slate-200 px-3 py-2 text-xs font-medium">
+      {/* Responsive Tablet / Mobile Navigation Bar — Zero Horizontal Overflow */}
+      <nav
+        aria-label="Navigation mobile"
+        className="grid grid-cols-2 sm:flex sm:flex-wrap xl:hidden items-center gap-1.5 bg-white border-b border-slate-200 px-3 py-2 text-xs font-medium w-full max-w-full"
+      >
         <button
           onClick={() => setActiveTab('workspace')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'workspace'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold'
-              : 'text-slate-600'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           {t.navWorkspace}
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'history'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold'
-              : 'text-slate-600'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           {t.navHistory}
         </button>
         <button
           onClick={() => setActiveTab('catalog_crud')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'catalog_crud'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold'
-              : 'text-slate-600'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           {t.navCatalogCrud}
         </button>
         <button
           onClick={() => setActiveTab('analysis')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'analysis'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold'
-              : 'text-slate-600'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           {t.navAnalysis}
         </button>
         <button
           onClick={() => setActiveTab('flutter_code')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'flutter_code'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold'
-              : 'text-slate-600'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           {t.navFlutterCode}
         </button>
         <button
           onClick={() => setActiveTab('privacy')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'privacy'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold'
-              : 'text-slate-600'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
           }`}
         >
           {t.navPrivacyPolicy}
         </button>
         <button
           onClick={() => setActiveTab('delete_account')}
-          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+          className={`col-span-2 sm:col-span-1 px-2.5 py-2 rounded-md text-center truncate transition-colors ${
             activeTab === 'delete_account'
-              ? 'bg-rose-50 text-rose-800 font-semibold'
-              : 'text-rose-700'
+              ? 'bg-rose-50 text-rose-800 font-semibold border border-rose-200'
+              : 'bg-rose-50/50 text-rose-700 hover:bg-rose-100/70'
           }`}
         >
           {t.navDeleteAccount}
         </button>
-      </div>
+      </nav>
 
       {/* Status notification bar */}
       {statusBanner && (
@@ -1002,53 +1006,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* Dedicated Inline Editor for Page 3 Reference Line: رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020 */}
-              {selectedPage === 3 && (
-                <div className="p-3 rounded-lg border border-emerald-300 bg-white space-y-2 shadow-2xs">
-                  <div className="flex items-center justify-between gap-2 flex-nowrap">
-                    <span className="text-xs font-semibold text-slate-700 truncate">
-                      N° & Année d’enregistrement (Même ligne sur le PDF)
-                    </span>
-                    <span
-                      dir="rtl"
-                      className="font-cairo font-bold text-sm text-emerald-950 whitespace-nowrap shrink-0"
-                    >
-                      المرجع الإداري (رقم / 142 ... / 2020)
-                    </span>
-                  </div>
-
-                  <div
-                    dir="rtl"
-                    className="flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-md bg-slate-50 border border-slate-200 font-cairo font-bold text-xs sm:text-sm text-slate-900 overflow-x-auto whitespace-nowrap"
-                  >
-                    <span className="shrink-0">رقم /</span>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      value={values['p3_ref_number'] ?? ''}
-                      onFocus={() => setActiveFieldId('p3_ref_number')}
-                      onChange={(e) => handleUpdateValue('p3_ref_number', e.target.value)}
-                      placeholder="142"
-                      aria-label="Numéro d'enregistrement (ex: 142)"
-                      className="w-16 px-2 py-1 text-center font-cairo font-bold text-sm text-emerald-900 bg-white border border-emerald-400 rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
-                    />
-                    <span className="shrink-0">م ت ش ع / م ت ع / م ت ا م م /</span>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      value={values['p3_ref_year'] !== undefined ? values['p3_ref_year'] : '2020'}
-                      onFocus={() => setActiveFieldId('p3_ref_year')}
-                      onChange={(e) => handleUpdateValue('p3_ref_year', e.target.value)}
-                      placeholder="2020"
-                      aria-label="Année d'enregistrement (ex: 2020)"
-                      className="w-20 px-2 py-1 text-center font-cairo font-bold text-sm text-emerald-900 bg-white border border-emerald-400 rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
-                    />
-                  </div>
-                </div>
-              )}
-
               {currentPageFields.map((field, index) => {
-                const isSelected = activeFieldId === field.id;
+                // p3_ref_year is edited on the exact same line inside the p3_ref_number card
+                if (field.id === 'p3_ref_year') {
+                  return null;
+                }
+
+                const isSelected =
+                  activeFieldId === field.id ||
+                  (field.id === 'p3_ref_number' && activeFieldId === 'p3_ref_year');
                 const val =
                   values[field.id] !== undefined
                     ? values[field.id]
@@ -1057,6 +1023,93 @@ export default function App() {
                     : '';
                 const prevSection = index > 0 ? currentPageFields[index - 1].section : null;
                 const showSectionHeader = field.section !== prevSection;
+
+                if (field.id === 'p3_ref_number') {
+                  const refYearVal =
+                    values['p3_ref_year'] !== undefined ? values['p3_ref_year'] : '2020';
+                  return (
+                    <React.Fragment key={field.id}>
+                      {showSectionHeader && (
+                        <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between gap-2 flex-nowrap">
+                          <span className="text-[11px] text-slate-400 whitespace-nowrap shrink-0">
+                            Police Cairo & Amiri · {field.dir.toUpperCase()}
+                          </span>
+                          <h2
+                            dir="rtl"
+                            className="font-cairo font-bold text-xs text-emerald-800 truncate"
+                          >
+                            {field.section}
+                          </h2>
+                        </div>
+                      )}
+
+                      <div
+                        ref={(el) => {
+                          fieldRefs.current['p3_ref_number'] = el;
+                          fieldRefs.current['p3_ref_year'] = el;
+                        }}
+                        onClick={() => setActiveFieldId('p3_ref_number')}
+                        className={`p-3 rounded-lg border transition-colors ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-50/30'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        {/* French and Arabic labels aligned on the exact same line */}
+                        <div className="flex items-center justify-between gap-2 mb-2 flex-nowrap">
+                          <span className="text-xs font-medium text-slate-600 truncate">
+                            N° & Année d’enregistrement (Police d’origine)
+                          </span>
+                          <label
+                            dir="rtl"
+                            className="font-amiri font-bold text-sm text-slate-900 whitespace-nowrap shrink-0"
+                          >
+                            رقم التسجيل والسنة (رقم / 142 ... / 2020)
+                          </label>
+                        </div>
+
+                        {/* Single-line inline reference editor using the original Amiri font */}
+                        <div
+                          dir="rtl"
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-slate-50 border border-slate-200 font-amiri font-bold text-base text-slate-900 overflow-x-auto whitespace-nowrap"
+                        >
+                          <span className="shrink-0 leading-none">رقم /</span>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={val}
+                            onFocus={() => setActiveFieldId('p3_ref_number')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFieldId('p3_ref_number');
+                            }}
+                            onChange={(e) => handleUpdateValue('p3_ref_number', e.target.value)}
+                            placeholder="142"
+                            aria-label="Numéro d'enregistrement (142)"
+                            className="w-16 px-1.5 py-0.5 text-center font-amiri font-bold text-base leading-none text-slate-900 bg-white border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
+                          />
+                          <span className="shrink-0 leading-none">
+                            م ت ش ع / م ت ع / م ت ا م م /
+                          </span>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={refYearVal}
+                            onFocus={() => setActiveFieldId('p3_ref_year')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFieldId('p3_ref_year');
+                            }}
+                            onChange={(e) => handleUpdateValue('p3_ref_year', e.target.value)}
+                            placeholder="2020"
+                            aria-label="Année d'enregistrement (2020)"
+                            className="w-20 px-1.5 py-0.5 text-center font-amiri font-bold text-base leading-none text-slate-900 bg-white border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
+                          />
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  );
+                }
 
                 const fieldChoices = field.catalogCategory
                   ? catalogItems.filter((c) => c.categoryKey === field.catalogCategory)

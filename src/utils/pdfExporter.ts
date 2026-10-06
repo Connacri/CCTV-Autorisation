@@ -4,6 +4,7 @@ import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { INITIAL_PDF_FIELDS, PdfFieldConfig } from '../data/pdfSchema';
 import {
   drawOfficialPageBackground,
+  drawPage3ReferenceLine,
   RenderOverlayOptions,
 } from './pdfTemplateRenderer';
 
@@ -149,7 +150,15 @@ export async function exportFilledPdf(params: {
       drawOfficialPageBackground(ctx, pageNum, canvasW, canvasH);
     }
 
-    // 2. Render Market Strikethrough on Page 3 ("1 – اشطب العبارة المستغنى عنها")
+    // 2. Render Page 3 reference line ("رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020") in original Amiri font
+    if (pageNum === 3) {
+      drawPage3ReferenceLine(ctx, canvasW, canvasH, schemaFields, values, {
+        ...options,
+        showFieldBoxes: false,
+      });
+    }
+
+    // 3. Render Market Strikethrough on Page 3 ("1 – اشطب العبارة المستغنى عنها")
     if (pageNum === 3 && options.marketStrike !== 'none') {
       ctx.save();
       ctx.strokeStyle = options.inkColor;
@@ -178,30 +187,19 @@ export async function exportFilledPdf(params: {
       ctx.restore();
     }
 
-    // 3. Position and draw each field for this page using exact coordinates from pdfSchema.ts
-    const pageFields = schemaFields.filter((f) => f.page === pageNum);
+    // 4. Position and draw each field for this page using exact coordinates from pdfSchema.ts
+    const pageFields = schemaFields.filter(
+      (f) =>
+        f.page === pageNum &&
+        f.id !== 'p3_ref_number' &&
+        f.id !== 'p3_ref_year'
+    );
 
     for (const field of pageFields) {
-      const rawVal =
-        values[field.id] !== undefined
-          ? values[field.id]
-          : field.id === 'p3_ref_year'
-          ? '2020'
-          : '';
-      let xL = px(field.xLeft + options.globalOffsetX);
-      let xR = px(field.xRight + options.globalOffsetX);
+      const rawVal = values[field.id] || '';
+      const xL = px(field.xLeft + options.globalOffsetX);
+      const xR = px(field.xRight + options.globalOffsetX);
       const yBase = py(field.y + options.globalOffsetY);
-
-      if (field.id === 'p3_ref_year') {
-        ctx.save();
-        ctx.font = `700 ${fs(9.8)}px "Cairo", sans-serif`;
-        const acronymW = ctx.measureText('م ت ش ع / م ت ع / م ت ا م م /\u200F').width;
-        ctx.restore();
-        const customShiftPx = px(field.xRight - 68.6);
-        xR = px(87.0 + options.globalOffsetX) - acronymW - fs(2.0) + customShiftPx;
-        xL = xR - px(Math.max(3.8, field.xRight - field.xLeft));
-      }
-
       const boxWidth = Math.max(20, xR - xL);
       const scaledPt = field.fontSize * options.fontSizeScale;
       const fontPx = fs(scaledPt);

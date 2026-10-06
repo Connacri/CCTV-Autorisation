@@ -43,8 +43,8 @@ export function drawOfficialPageBackground(
   ctx.direction = 'rtl';
 
   if (pageNumber === 1) {
-    // Top Republic Header
-    ctx.font = `700 ${fs(15)}px "Amiri", "Cairo", serif`;
+    // Top Republic Header (identical across all 3 pages, no underline)
+    ctx.font = `700 ${fs(14.5)}px "Amiri", "Cairo", serif`;
     ctx.textAlign = 'center';
     ctx.fillText(
       'الجمهوريـــــــــــــة الجزائريـــــــــــــة الديمقراطيـــــــــــــة الشعبيـــــــــــــة',
@@ -132,12 +132,12 @@ export function drawOfficialPageBackground(
     ctx.fillText('1 -ذكر الاسم و اللقب أو عنوان الشركة.', px(95.2), py(91.3));
     ctx.fillText('2 -تعيين عنوان مكان استغلال نظام كاميرات المراقبة.', px(95.2), py(94.1));
   } else if (pageNumber === 2) {
-    // Republic Header on Page 2 (clean white background — gray highlight removed)
+    // Republic Header on Page 2 (identical across all 3 pages, no underline)
     ctx.fillStyle = '#0f172a';
     ctx.font = `700 ${fs(14.5)}px "Amiri", "Cairo", serif`;
     ctx.textAlign = 'center';
     ctx.fillText(
-      'الجمهوريـــــــــــــة الجزائريـــــــــــــة الديمقراطيــــــــــــة الشعبيـــــــــــة',
+      'الجمهوريـــــــــــــة الجزائريـــــــــــــة الديمقراطيـــــــــــــة الشعبيـــــــــــــة',
       px(49.5),
       py(4.3)
     );
@@ -275,15 +275,23 @@ export function drawOfficialPageBackground(
     ctx.fillText('قسم شركات الحراسة و التجهيزات الحساسة', px(95.2), py(12.4));
 
     // Reference line on Page 3 ("رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020")
-    // Drawn with Cairo 9.8pt at y = 13.9 so رقم /, 142, م ت ش ع / م ت ع / م ت ا م م /, and 2020
-    // sit on the exact same horizontal baseline.
-    ctx.save();
-    ctx.font = `700 ${fs(9.8)}px "Cairo", sans-serif`;
-    ctx.textAlign = 'right';
-    ctx.direction = 'rtl';
-    ctx.fillText('رقم /\u200F', px(95.2), py(13.9));
-    ctx.fillText('م ت ش ع / م ت ع / م ت ا م م /\u200F', px(87.0), py(13.9));
-    ctx.restore();
+    // Drawn in drawPage3ReferenceLine using the original "Amiri" serif font on y = 13.9
+    drawPage3ReferenceLine(
+      ctx,
+      w,
+      h,
+      [],
+      { p3_ref_number: '', p3_ref_year: '2020' },
+      {
+        inkColor: '#0f172a',
+        fontWeight: '700',
+        globalOffsetX: 0,
+        globalOffsetY: 0,
+        fontSizeScale: 1.0,
+        marketStrike: 'none',
+        showFieldBoxes: false,
+      }
+    );
 
     // Title (clean white background — gray highlight removed)
     ctx.fillStyle = '#0f172a';
@@ -488,6 +496,133 @@ export function drawOfficialPageBackground(
 }
 
 /**
+ * Renders the complete Page 3 administrative registration reference line:
+ *   رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020
+ * on a single continuous baseline (y = 13.9%) using the original serif font
+ * ("Amiri", "Cairo", serif) so that the Arabic labels, slashes, registration
+ * number (p3_ref_number = 142), and reference year (p3_ref_year = 2020) are
+ * 100% collinear on the exact same line with the original font.
+ */
+export function drawPage3ReferenceLine(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  fields: PdfFieldConfig[],
+  values: Record<string, string>,
+  options: RenderOverlayOptions
+) {
+  const px = (xPct: number) => (xPct / 100) * w;
+  const py = (yPct: number) => (yPct / 100) * h;
+  const fs = (pt: number) => (pt / 595.28) * w;
+
+  const refNumField = fields.find((f) => f.id === 'p3_ref_number');
+  const refYearField = fields.find((f) => f.id === 'p3_ref_year');
+
+  const baseYPct = (refNumField?.y ?? 13.9) + options.globalOffsetY;
+  const yLine = py(baseYPct);
+  const fontPt = (refNumField?.fontSize ?? 9.8) * options.fontSizeScale;
+  const fontPx = fs(fontPt);
+  const originalFont = `700 ${fontPx}px "Amiri", "Cairo", serif`;
+
+  const refNumVal = (values['p3_ref_number'] ?? '').trim();
+  const refYearVal =
+    values['p3_ref_year'] !== undefined ? values['p3_ref_year'].trim() : '2020';
+
+  ctx.save();
+  ctx.font = originalFont;
+  ctx.textBaseline = 'alphabetic';
+
+  // Cleanly mask the entire reference line strip on Page 3 (covers uploaded scan or background)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(px(58.0), yLine - fontPx * 1.05, px(37.6), fontPx * 1.45);
+
+  let cursorX = px(95.2 + options.globalOffsetX);
+
+  const drawToken = (
+    text: string,
+    dir: 'rtl' | 'ltr',
+    color: string,
+    gapAfterPt = 2.0
+  ) => {
+    ctx.direction = dir;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = color;
+    ctx.fillText(text, cursorX, yLine);
+    const width = ctx.measureText(text).width;
+    cursorX -= width + fs(gapAfterPt);
+  };
+
+  // 1. "رقم" + "/"
+  drawToken('رقم', 'rtl', '#0f172a', 1.2);
+  drawToken('/', 'ltr', '#0f172a', 2.2);
+
+  // 2. Modifiable registration number (e.g. "142") in original font on the exact same line
+  const numShiftX = refNumField ? px(refNumField.xLeft - 87.2) : 0;
+  const numShiftY = refNumField ? py(refNumField.y - 13.9) : 0;
+  const numTextWidth = refNumVal ? ctx.measureText(refNumVal).width : fs(15);
+  const numSlotWidth = Math.max(fs(16), numTextWidth + fs(4));
+  const numRightX = cursorX + numShiftX;
+  const numLeftX = numRightX - numSlotWidth;
+
+  if (options.showFieldBoxes) {
+    const isSel = options.activeFieldId === 'p3_ref_number';
+    ctx.save();
+    ctx.fillStyle = isSel ? 'rgba(37, 99, 235, 0.12)' : 'rgba(37, 99, 235, 0.06)';
+    ctx.strokeStyle = isSel ? 'rgba(37, 99, 235, 0.65)' : 'rgba(37, 99, 235, 0.35)';
+    ctx.lineWidth = isSel ? 1.5 : 1;
+    ctx.setLineDash([3, 2]);
+    ctx.fillRect(numLeftX, yLine + numShiftY - fontPx * 0.95, numSlotWidth, fontPx * 1.3);
+    ctx.strokeRect(numLeftX, yLine + numShiftY - fontPx * 0.95, numSlotWidth, fontPx * 1.3);
+    ctx.restore();
+  }
+
+  if (refNumVal) {
+    ctx.direction = 'ltr';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = options.inkColor || '#0f172a';
+    ctx.fillText(refNumVal, (numLeftX + numRightX) / 2, yLine + numShiftY);
+  }
+  cursorX -= numSlotWidth + fs(2.2);
+
+  // 3. "م ت ش ع / م ت ع / م ت ا م م /"
+  drawToken('م ت ش ع', 'rtl', '#0f172a', 1.8);
+  drawToken('/', 'ltr', '#0f172a', 1.8);
+  drawToken('م ت ع', 'rtl', '#0f172a', 1.8);
+  drawToken('/', 'ltr', '#0f172a', 1.8);
+  drawToken('م ت ا م م', 'rtl', '#0f172a', 1.8);
+  drawToken('/', 'ltr', '#0f172a', 2.2);
+
+  // 4. Modifiable reference year (e.g. "2020") in original font on the exact same line
+  const yearShiftX = refYearField ? px(refYearField.xLeft - 64.2) : 0;
+  const yearShiftY = refYearField ? py(refYearField.y - 13.9) : 0;
+  const yearTextWidth = refYearVal ? ctx.measureText(refYearVal).width : fs(22);
+  const yearSlotWidth = Math.max(fs(22), yearTextWidth + fs(4));
+  const yearRightX = cursorX + yearShiftX;
+  const yearLeftX = yearRightX - yearSlotWidth;
+
+  if (options.showFieldBoxes) {
+    const isSel = options.activeFieldId === 'p3_ref_year';
+    ctx.save();
+    ctx.fillStyle = isSel ? 'rgba(37, 99, 235, 0.12)' : 'rgba(37, 99, 235, 0.06)';
+    ctx.strokeStyle = isSel ? 'rgba(37, 99, 235, 0.65)' : 'rgba(37, 99, 235, 0.35)';
+    ctx.lineWidth = isSel ? 1.5 : 1;
+    ctx.setLineDash([3, 2]);
+    ctx.fillRect(yearLeftX, yLine + yearShiftY - fontPx * 0.95, yearSlotWidth, fontPx * 1.3);
+    ctx.strokeRect(yearLeftX, yLine + yearShiftY - fontPx * 0.95, yearSlotWidth, fontPx * 1.3);
+    ctx.restore();
+  }
+
+  if (refYearVal) {
+    ctx.direction = 'ltr';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = options.inkColor || '#0f172a';
+    ctx.fillText(refYearVal, (yearLeftX + yearRightX) / 2, yLine + yearShiftY);
+  }
+
+  ctx.restore();
+}
+
+/**
  * Draws the user's Arabic/French values in the Cairo font directly at the
  * mapped field coordinates for the specified page.
  */
@@ -504,6 +639,12 @@ export function drawFilledFieldsOverlay(
   const px = (xPct: number) => (xPct / 100) * w;
   const py = (yPct: number) => (yPct / 100) * h;
   const fs = (pt: number) => (pt / 595.28) * w;
+
+  if (pageNumber === 3) {
+    // Draw the unified Page 3 registration reference line ("رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020")
+    // in the original Amiri serif font on a single exact baseline
+    drawPage3ReferenceLine(ctx, w, h, fields, values, options);
+  }
 
   // Market Strikethrough on Page 3 ("1 – اشطب العبارة المستغنى عنها")
   if (pageNumber === 3) {
@@ -570,35 +711,23 @@ export function drawFilledFieldsOverlay(
     }
   }
 
-  const pageFields = fields.filter((f) => f.page === pageNumber);
+  const pageFields = fields.filter(
+    (f) =>
+      f.page === pageNumber &&
+      f.id !== 'p3_ref_number' &&
+      f.id !== 'p3_ref_year'
+  );
 
   for (const field of pageFields) {
-    const rawVal =
-      values[field.id] !== undefined
-        ? values[field.id]
-        : field.id === 'p3_ref_year'
-        ? '2020'
-        : '';
-    let xL = px(field.xLeft + options.globalOffsetX);
-    let xR = px(field.xRight + options.globalOffsetX);
+    const rawVal = values[field.id] || '';
+    const xL = px(field.xLeft + options.globalOffsetX);
+    const xR = px(field.xRight + options.globalOffsetX);
     const yBase = py(field.y + options.globalOffsetY);
-
-    // Dynamically align p3_ref_year right after "م ت ش ع / م ت ع / م ت ا م م /" on the same line
-    if (field.id === 'p3_ref_year') {
-      ctx.save();
-      ctx.font = `700 ${fs(9.8)}px "Cairo", sans-serif`;
-      const acronymW = ctx.measureText('م ت ش ع / م ت ع / م ت ا م م /\u200F').width;
-      ctx.restore();
-      const customShiftPx = px(field.xRight - 68.6);
-      xR = px(87.0 + options.globalOffsetX) - acronymW - fs(2.0) + customShiftPx;
-      xL = xR - px(Math.max(3.8, field.xRight - field.xLeft));
-    }
-
     const boxWidth = Math.max(20, xR - xL);
     const scaledPt = field.fontSize * options.fontSizeScale;
     const fontPx = fs(scaledPt);
 
-    // Paint clean white mask over static printed text (e.g. "ولاية وهران" or "2020" on uploaded PDFs)
+    // Paint clean white mask over static printed text (e.g. "ولاية وهران" on uploaded PDFs)
     if (field.maskBackground) {
       ctx.save();
       ctx.fillStyle = '#ffffff';

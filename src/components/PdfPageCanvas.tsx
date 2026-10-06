@@ -123,14 +123,13 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
   };
 
   const displayWidth = Math.round(595 * zoom);
-  const displayHeight = Math.round(842 * zoom);
 
   return (
     <div
-      className="relative mx-auto bg-white shadow-sm border border-slate-300 select-none transition-all duration-150"
+      className="relative mx-auto w-full bg-white shadow-sm border border-slate-300 select-none transition-all duration-150"
       style={{
-        width: `${displayWidth}px`,
-        height: `${displayHeight}px`,
+        maxWidth: `${displayWidth}px`,
+        aspectRatio: '595.28 / 841.89',
       }}
     >
       <canvas
@@ -212,7 +211,11 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
                       textAlign: field.align,
                       color: options.inkColor,
                     }}
-                    className="w-full h-full px-1 bg-white/95 font-cairo font-semibold leading-none focus:outline-none"
+                    className={`w-full h-full px-1 bg-white/95 leading-none focus:outline-none ${
+                      field.id === 'p3_ref_number' || field.id === 'p3_ref_year'
+                        ? 'font-amiri font-bold'
+                        : 'font-cairo font-semibold'
+                    }`}
                   />
                 )
               ) : null}
