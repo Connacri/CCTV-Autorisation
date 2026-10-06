@@ -20,7 +20,7 @@ dependencies:
   printing: ^5.13.4
   # Police Cairo pour l'interface et le rendu PDF Arabe RTL
   google_fonts: ^6.2.1
-  file_picker: ^8.1.4
+  file_picker: 10.3.10
 
 dev_dependencies:
   flutter_test:
