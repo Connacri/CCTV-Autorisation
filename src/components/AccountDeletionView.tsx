@@ -29,13 +29,13 @@ export const AccountDeletionView: React.FC<AccountDeletionViewProps> = ({
     identifier: string;
   } | null>(null);
 
-  const origin =
-    typeof window !== 'undefined' && window.location.origin
-      ? window.location.origin
-      : 'https://votre-domaine.github.io';
+  const baseUrl =
+    typeof window !== 'undefined' && window.location.href
+      ? new URL('.', window.location.href).href.replace(/\/$/, '')
+      : 'https://connacri.github.io/CCTV-Autorisation';
 
-  const staticDeleteUrl = `${origin}/delete-account.html`;
-  const routeDeleteUrl = `${origin}/?page=delete-account`;
+  const staticDeleteUrl = `${baseUrl}/delete-account.html`;
+  const routeDeleteUrl = `${baseUrl}/?page=delete-account`;
 
   const currentDossierCount = objectBoxStore.getTotalDossierCount();
   const currentCatalogCount = objectBoxStore.getAllCatalogItems().length;
@@ -83,7 +83,7 @@ export const AccountDeletionView: React.FC<AccountDeletionViewProps> = ({
           </div>
 
           <a
-            href="/delete-account.html"
+            href="./delete-account.html"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors whitespace-nowrap self-start md:self-auto"

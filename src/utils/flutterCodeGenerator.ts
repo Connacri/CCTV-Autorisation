@@ -73,7 +73,10 @@ jobs:
           node-version: '22'
       - run: npm install --legacy-peer-deps
       - run: npm run lint
-      - run: npm run build
+      - run: |
+          npm run build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
       - name: Package web-build.zip
         run: |
           cd dist && zip -r ../web-build.zip . && cd ..
@@ -92,8 +95,19 @@ jobs:
           name: web-release-bundle
           path: web-build.zip
       - if: github.ref == 'refs/heads/main'
-        uses: actions/configure-pages@v5
+        continue-on-error: true
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: \${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true
       - if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - if: github.ref == 'refs/heads/main'
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'

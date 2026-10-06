@@ -43,8 +43,11 @@ jobs:
       - name: Static analysis & TypeScript check
         run: npm run lint
 
-      - name: Build production Web bundle
-        run: npm run build
+      - name: Build production Web bundle (with relative base './' for /CCTV-Autorisation/)
+        run: |
+          npm run build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Package web-build.zip for GitHub Release
         run: |
@@ -71,10 +74,21 @@ jobs:
           name: web-release-bundle
           path: web-build.zip
 
+      - name: Publish ./dist to gh-pages branch (for branch-based GitHub Pages)
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true
+
       - name: Configure GitHub Pages
         if: github.ref == 'refs/heads/main'
         continue-on-error: true
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/main'

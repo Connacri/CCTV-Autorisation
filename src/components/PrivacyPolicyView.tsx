@@ -4,13 +4,13 @@ import { ShieldCheck, Copy, Check, ExternalLink, Lock, Database, Globe } from 'l
 export const PrivacyPolicyView: React.FC = () => {
   const [copiedUrl, setCopiedUrl] = useState<'static' | 'route' | null>(null);
 
-  const origin =
-    typeof window !== 'undefined' && window.location.origin
-      ? window.location.origin
-      : 'https://votre-domaine.github.io';
+  const baseUrl =
+    typeof window !== 'undefined' && window.location.href
+      ? new URL('.', window.location.href).href.replace(/\/$/, '')
+      : 'https://connacri.github.io/CCTV-Autorisation';
 
-  const staticPrivacyUrl = `${origin}/privacy.html`;
-  const routePrivacyUrl = `${origin}/?page=privacy`;
+  const staticPrivacyUrl = `${baseUrl}/privacy.html`;
+  const routePrivacyUrl = `${baseUrl}/?page=privacy`;
 
   const handleCopy = async (type: 'static' | 'route', url: string) => {
     await navigator.clipboard.writeText(url);
@@ -37,7 +37,7 @@ export const PrivacyPolicyView: React.FC = () => {
           </div>
 
           <a
-            href="/privacy.html"
+            href="./privacy.html"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap self-start md:self-auto"
