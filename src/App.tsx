@@ -265,6 +265,7 @@ export default function App() {
 
       await exportFilledPdf({
         originalPdfBuffer,
+        uploadedPageImages,
         fields,
         values,
         options: overlayOptions,
@@ -273,7 +274,7 @@ export default function App() {
           : 'Dossier_Equipements_Sensibles_Oran_Cairo.pdf',
       });
       setStatusBanner(
-        `PDF généré en police Cairo et sauvegardé dans l'historique ObjectBox (#${saved.id}) !`
+        `PDF exporté via jsPDF avec les positions exactes de pdfSchema.ts et sauvegardé dans l'historique ObjectBox (#${saved.id}) !`
       );
       setTimeout(() => setStatusBanner(null), 5000);
     } catch (err) {
@@ -419,7 +420,9 @@ export default function App() {
           <button
             onClick={handleDownloadPdf}
             disabled={isExporting}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs"
+            aria-label="Exporter en PDF"
+            title="Exporter en PDF (jsPDF + pdfSchema.ts)"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{isExporting ? t.exportingPdf : t.downloadFilledPdf}</span>

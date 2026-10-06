@@ -273,7 +273,17 @@ export function drawOfficialPageBackground(
     ctx.fillText('مصلحة التنظيم العام', px(93.0), py(9.4));
     ctx.fillText('مكتب تنظيم الأسلحة و المواد المتفجرة', px(95.2), py(10.9));
     ctx.fillText('قسم شركات الحراسة و التجهيزات الحساسة', px(95.2), py(12.4));
-    ctx.fillText('رقم/         م ت ش ع / م ت ع / م ت ا م م / 2020', px(95.2), py(13.9));
+
+    // Reference line on Page 3 ("رقم / 142 م ت ش ع / م ت ع / م ت ا م م / 2020")
+    // Drawn with Cairo 9.8pt at y = 13.9 so رقم /, 142, م ت ش ع / م ت ع / م ت ا م م /, and 2020
+    // sit on the exact same horizontal baseline.
+    ctx.save();
+    ctx.font = `700 ${fs(9.8)}px "Cairo", sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.direction = 'rtl';
+    ctx.fillText('رقم /\u200F', px(95.2), py(13.9));
+    ctx.fillText('م ت ش ع / م ت ع / م ت ا م م /\u200F', px(87.0), py(13.9));
+    ctx.restore();
 
     // Title (clean white background — gray highlight removed)
     ctx.fillStyle = '#0f172a';
@@ -563,19 +573,36 @@ export function drawFilledFieldsOverlay(
   const pageFields = fields.filter((f) => f.page === pageNumber);
 
   for (const field of pageFields) {
-    const rawVal = values[field.id] || '';
-    const xL = px(field.xLeft + options.globalOffsetX);
-    const xR = px(field.xRight + options.globalOffsetX);
+    const rawVal =
+      values[field.id] !== undefined
+        ? values[field.id]
+        : field.id === 'p3_ref_year'
+        ? '2020'
+        : '';
+    let xL = px(field.xLeft + options.globalOffsetX);
+    let xR = px(field.xRight + options.globalOffsetX);
     const yBase = py(field.y + options.globalOffsetY);
+
+    // Dynamically align p3_ref_year right after "م ت ش ع / م ت ع / م ت ا م م /" on the same line
+    if (field.id === 'p3_ref_year') {
+      ctx.save();
+      ctx.font = `700 ${fs(9.8)}px "Cairo", sans-serif`;
+      const acronymW = ctx.measureText('م ت ش ع / م ت ع / م ت ا م م /\u200F').width;
+      ctx.restore();
+      const customShiftPx = px(field.xRight - 68.6);
+      xR = px(87.0 + options.globalOffsetX) - acronymW - fs(2.0) + customShiftPx;
+      xL = xR - px(Math.max(3.8, field.xRight - field.xLeft));
+    }
+
     const boxWidth = Math.max(20, xR - xL);
     const scaledPt = field.fontSize * options.fontSizeScale;
     const fontPx = fs(scaledPt);
 
-    // Paint clean white mask over static printed text (e.g. "ولاية وهران" on uploaded PDFs)
+    // Paint clean white mask over static printed text (e.g. "ولاية وهران" or "2020" on uploaded PDFs)
     if (field.maskBackground) {
       ctx.save();
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(xL, yBase - fontPx * 1.15, boxWidth, fontPx * 1.55);
+      ctx.fillRect(xL - fs(2), yBase - fontPx * 1.1, boxWidth + fs(4), fontPx * 1.45);
       ctx.restore();
     }
 
