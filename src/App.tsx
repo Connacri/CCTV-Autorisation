@@ -677,7 +677,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Auto-sync & Market Strike quick bar */}
+              {/* Auto-sync & Market Strike quick bar (always visible from the form) */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
                 <label className="inline-flex items-center gap-2 cursor-pointer text-slate-700 select-none">
                   <input
@@ -689,25 +689,30 @@ export default function App() {
                   <span>{t.autoSyncLabel}</span>
                 </label>
 
-                {selectedPage === 3 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-500">{t.marketLabel}</span>
-                    <select
-                      value={overlayOptions.marketStrike}
-                      onChange={(e) =>
-                        setOverlayOptions((prev) => ({
-                          ...prev,
-                          marketStrike: e.target.value as MarketStrikeOption,
-                        }))
-                      }
-                      className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-white font-cairo"
-                    >
-                      <option value="strike_external">{t.marketNational}</option>
-                      <option value="strike_national">{t.marketExternal}</option>
-                      <option value="none">{t.marketNone}</option>
-                    </select>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-slate-600">{t.marketLabel}</span>
+                  <select
+                    value={overlayOptions.marketStrike}
+                    onChange={(e) =>
+                      setOverlayOptions((prev) => ({
+                        ...prev,
+                        marketStrike: e.target.value as MarketStrikeOption,
+                      }))
+                    }
+                    className="text-xs border border-emerald-300 rounded-md px-2 py-1 bg-white font-cairo font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  >
+                    <option value="strike_external">
+                      شطب « الخارجية » (الإبقاء على الوطنية)
+                    </option>
+                    <option value="strike_national">
+                      شطب « الوطنية » (الإبقاء على الخارجية)
+                    </option>
+                    <option value="strike_both">
+                      شطب الاثنين (الوطنية والخارجية)
+                    </option>
+                    <option value="none">{t.marketNone}</option>
+                  </select>
+                </div>
               </div>
 
               {/* Collapsible Cairo Typography & Coordinate Calibration Drawer */}
@@ -863,6 +868,95 @@ export default function App() {
 
             {/* Scrollable Form Fields for Current Page */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Dedicated Market Strikethrough Card on Page 3 ("اشطب العبارة المستغنى عنها") */}
+              {selectedPage === 3 && (
+                <div className="p-3 rounded-lg border border-emerald-300 bg-emerald-50/40 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold text-emerald-950">
+                      Choix du Marché — Mention à barrer sur le PDF (Renvoi 1)
+                    </span>
+                    <span dir="rtl" className="font-cairo font-bold text-sm text-emerald-950">
+                      1 – اشطب العبارة المستغنى عنها (الوطنية / الخارجية)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOverlayOptions((p) => ({
+                          ...p,
+                          marketStrike: 'strike_external',
+                        }))
+                      }
+                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                        overlayOptions.marketStrike === 'strike_external'
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div>السوق الوطنية</div>
+                      <div className="text-[11px] opacity-90 line-through">– الخارجية (1)</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOverlayOptions((p) => ({
+                          ...p,
+                          marketStrike: 'strike_national',
+                        }))
+                      }
+                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                        overlayOptions.marketStrike === 'strike_national'
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div>السوق الخارجية</div>
+                      <div className="text-[11px] opacity-90 line-through">– الوطنية.</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOverlayOptions((p) => ({
+                          ...p,
+                          marketStrike: 'strike_both',
+                        }))
+                      }
+                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                        overlayOptions.marketStrike === 'strike_both'
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div>شطب الاثنين</div>
+                      <div className="text-[11px] opacity-90 line-through">
+                        الوطنية + الخارجية
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOverlayOptions((p) => ({
+                          ...p,
+                          marketStrike: 'none',
+                        }))
+                      }
+                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                        overlayOptions.marketStrike === 'none'
+                          ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div>بدون شطب</div>
+                      <div className="text-[11px] opacity-80">Aucune rature</div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {currentPageFields.map((field, index) => {
                 const isSelected = activeFieldId === field.id;
                 const val = values[field.id] || '';
@@ -1122,6 +1216,9 @@ export default function App() {
                       activeFieldId={activeFieldId}
                       onSelectField={handleSelectField}
                       onUpdateValue={handleUpdateValue}
+                      onChangeMarketStrike={(nextStrike) =>
+                        setOverlayOptions((p) => ({ ...p, marketStrike: nextStrike }))
+                      }
                       zoom={zoom}
                       directEditOnPdf={directEditOnPdf}
                     />
@@ -1149,6 +1246,9 @@ export default function App() {
                     activeFieldId={activeFieldId}
                     onSelectField={handleSelectField}
                     onUpdateValue={handleUpdateValue}
+                    onChangeMarketStrike={(nextStrike) =>
+                      setOverlayOptions((p) => ({ ...p, marketStrike: nextStrike }))
+                    }
                     zoom={zoom}
                     directEditOnPdf={directEditOnPdf}
                   />

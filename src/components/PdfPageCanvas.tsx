@@ -3,6 +3,7 @@ import { PdfFieldConfig } from '../data/pdfSchema';
 import {
   drawFilledFieldsOverlay,
   drawOfficialPageBackground,
+  MarketStrikeOption,
   RenderOverlayOptions,
 } from '../utils/pdfTemplateRenderer';
 
@@ -15,6 +16,7 @@ interface PdfPageCanvasProps {
   activeFieldId: string | null;
   onSelectField: (fieldId: string) => void;
   onUpdateValue: (fieldId: string, newValue: string) => void;
+  onChangeMarketStrike?: (nextStrike: MarketStrikeOption) => void;
   onNudgeField?: (fieldId: string, dxPct: number, dyPct: number) => void;
   zoom: number;
   directEditOnPdf: boolean;
@@ -29,6 +31,7 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
   activeFieldId,
   onSelectField,
   onUpdateValue,
+  onChangeMarketStrike,
   zoom,
   directEditOnPdf,
 }) => {
@@ -83,6 +86,22 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
     const rect = canvas.getBoundingClientRect();
     const clickXPct = ((e.clientX - rect.left) / rect.width) * 100;
     const clickYPct = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // On Page 3, allow clicking directly on "– الوطنية." or "–الخارجية (1)" to bar/unbar
+    if (pageNumber === 3 && onChangeMarketStrike) {
+      if (clickXPct >= 19.5 && clickXPct <= 30.2 && clickYPct >= 14.3 && clickYPct <= 17.2) {
+        onChangeMarketStrike(
+          options.marketStrike === 'strike_national' ? 'strike_external' : 'strike_national'
+        );
+        return;
+      }
+      if (clickXPct >= 15.5 && clickXPct <= 28.5 && clickYPct >= 17.6 && clickYPct <= 20.6) {
+        onChangeMarketStrike(
+          options.marketStrike === 'strike_external' ? 'strike_national' : 'strike_external'
+        );
+        return;
+      }
+    }
 
     // Find closest matching field on this page
     let matched: PdfFieldConfig | null = null;

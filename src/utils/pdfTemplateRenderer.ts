@@ -1,6 +1,10 @@
 import { PdfFieldConfig } from '../data/pdfSchema';
 
-export type MarketStrikeOption = 'strike_external' | 'strike_national' | 'none';
+export type MarketStrikeOption =
+  | 'strike_external'
+  | 'strike_national'
+  | 'strike_both'
+  | 'none';
 
 export interface RenderOverlayOptions {
   inkColor: string;
@@ -14,10 +18,10 @@ export interface RenderOverlayOptions {
 }
 
 /**
- * Draws the exact, unmodified background of the 3-page Wilaya d'Oran PDF
+ * Draws the clean official background of the 3-page Wilaya PDF
  * onto a canvas when the user has not uploaded their local PDF file yet.
- * Every header, gray highlight, dotted line, table border, and footnote
- * mirrors the original scanned 3-page document.
+ * All gray scan highlight zones have been removed on Page 1, Page 2, and Page 3
+ * for a crisp, print-ready administrative document.
  */
 export function drawOfficialPageBackground(
   ctx: CanvasRenderingContext2D,
@@ -26,7 +30,7 @@ export function drawOfficialPageBackground(
   h: number
 ) {
   ctx.save();
-  // Pure white paper background
+  // Pure white paper background (no gray highlight zones)
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, w, h);
 
@@ -89,12 +93,7 @@ export function drawOfficialPageBackground(
       py(56.5)
     );
 
-    // Gray highlight boxes on "ملاحظة", "رخصة اقتناء", "رخصة استغلال" (exact replica of scan)
-    ctx.fillStyle = '#d1d5db';
-    ctx.fillRect(px(86.8), py(62.5), px(8.4), py(4.6)); // ملاحظة
-    ctx.fillRect(px(54.8), py(62.5), px(8.8), py(4.6)); // رخصة اقتناء
-    ctx.fillRect(px(5.8), py(62.5), px(11.4), py(4.6)); // رخصة استغلال
-
+    // Note block (clean white background — gray highlight boxes removed)
     ctx.fillStyle = '#0f172a';
     ctx.font = `700 ${fs(14.5)}px "Amiri", "Cairo", serif`;
     ctx.fillText('ملاحظة:', px(95.2), py(65.5));
@@ -133,10 +132,7 @@ export function drawOfficialPageBackground(
     ctx.fillText('1 -ذكر الاسم و اللقب أو عنوان الشركة.', px(95.2), py(91.3));
     ctx.fillText('2 -تعيين عنوان مكان استغلال نظام كاميرات المراقبة.', px(95.2), py(94.1));
   } else if (pageNumber === 2) {
-    // Gray highlight behind Republic Header on Page 2
-    ctx.fillStyle = '#d1d5db';
-    ctx.fillRect(px(25.8), py(1.6), px(47.2), py(4.2));
-
+    // Republic Header on Page 2 (clean white background — gray highlight removed)
     ctx.fillStyle = '#0f172a';
     ctx.font = `700 ${fs(14.5)}px "Amiri", "Cairo", serif`;
     ctx.textAlign = 'center';
@@ -255,10 +251,7 @@ export function drawOfficialPageBackground(
     ctx.fillText('2 -حدد العنوان الشخصي أو عنوان المقر الاجتماعي', px(95.2), py(96.6));
     ctx.fillText('لطالب الرخصة .', px(95.2), py(99.0));
   } else if (pageNumber === 3) {
-    // Page 3 Header with gray highlight
-    ctx.fillStyle = '#d1d5db';
-    ctx.fillRect(px(13.2), py(0.9), px(72.4), py(3.2));
-
+    // Page 3 Header (clean white background — gray highlight removed)
     ctx.fillStyle = '#0f172a';
     ctx.font = `700 ${fs(14.5)}px "Amiri", "Cairo", serif`;
     ctx.textAlign = 'center';
@@ -280,12 +273,9 @@ export function drawOfficialPageBackground(
     ctx.fillText('مصلحة التنظيم العام', px(93.0), py(9.4));
     ctx.fillText('مكتب تنظيم الأسلحة و المواد المتفجرة', px(95.2), py(10.9));
     ctx.fillText('قسم شركات الحراسة و التجهيزات الحساسة', px(95.2), py(12.4));
-    ctx.fillText('رقم/        م ت ش ع / م ت ع / م ت ا م م / 2020', px(95.2), py(13.9));
+    ctx.fillText('رقم/         م ت ش ع / م ت ع / م ت ا م م / 2020', px(95.2), py(13.9));
 
-    // Title with gray box
-    ctx.fillStyle = '#d1d5db';
-    ctx.fillRect(px(35.6), py(14.3), px(36.2), py(3.1));
-
+    // Title (clean white background — gray highlight removed)
     ctx.fillStyle = '#0f172a';
     ctx.font = `700 ${fs(13.2)}px "Amiri", "Cairo", serif`;
     ctx.fillText('طلب رخصة اقتناء تجهيزات حساسة من السوق', px(71.5), py(16.4));
@@ -335,7 +325,7 @@ export function drawOfficialPageBackground(
     ctx.fillText('طلب رخصة اقتناء و تعيين حيازة التجهيزات الحساسة المبينة أدناه :', px(95.2), py(46.3));
 
     // ========================================================================
-    // TABLE ON PAGE 3 (Exact coordinates matching scan)
+    // TABLE ON PAGE 3 (Exact coordinates matching scan, no gray highlight)
     // ========================================================================
     const tLeft = px(3.2);
     const tRight = px(96.2);
@@ -352,9 +342,6 @@ export function drawOfficialPageBackground(
     const rRow2 = py(66.8);
     const rSubTotal = py(69.8);
 
-    // Gray highlight for "الرقم التسلسلي" in table header
-    ctx.fillStyle = '#d1d5db';
-    ctx.fillRect(px(57.2), py(52.0), px(9.2), py(2.3));
     ctx.fillStyle = '#0f172a';
 
     // Outer table border
@@ -508,25 +495,69 @@ export function drawFilledFieldsOverlay(
   const py = (yPct: number) => (yPct / 100) * h;
   const fs = (pt: number) => (pt / 595.28) * w;
 
-  // Optional Market Strikethrough on Page 3 ("اشطب العبارة المستغنى عنها")
-  if (pageNumber === 3 && options.marketStrike !== 'none') {
-    ctx.save();
-    ctx.strokeStyle = options.inkColor;
-    ctx.lineWidth = fs(1.6);
-    if (options.marketStrike === 'strike_external') {
-      // Cross out "- الخارجية (1)"
-      ctx.beginPath();
-      ctx.moveTo(px(19.5), py(19.3));
-      ctx.lineTo(px(27.5), py(19.3));
-      ctx.stroke();
-    } else if (options.marketStrike === 'strike_national') {
-      // Cross out "- الوطنية."
-      ctx.beginPath();
-      ctx.moveTo(px(21.2), py(16.0));
-      ctx.lineTo(px(29.0), py(16.0));
-      ctx.stroke();
+  // Market Strikethrough on Page 3 ("1 – اشطب العبارة المستغنى عنها")
+  if (pageNumber === 3) {
+    if (options.showFieldBoxes) {
+      ctx.save();
+      ctx.setLineDash([3, 2]);
+      ctx.lineWidth = 1;
+      // Box around "– الوطنية."
+      const isNatStruck =
+        options.marketStrike === 'strike_national' ||
+        options.marketStrike === 'strike_both';
+      ctx.fillStyle = isNatStruck
+        ? 'rgba(220, 38, 38, 0.08)'
+        : 'rgba(16, 185, 129, 0.08)';
+      ctx.strokeStyle = isNatStruck
+        ? 'rgba(220, 38, 38, 0.5)'
+        : 'rgba(5, 150, 105, 0.5)';
+      ctx.fillRect(px(19.8), py(14.5), px(10.0), py(2.5));
+      ctx.strokeRect(px(19.8), py(14.5), px(10.0), py(2.5));
+
+      // Box around "–الخارجية (1)"
+      const isExtStruck =
+        options.marketStrike === 'strike_external' ||
+        options.marketStrike === 'strike_both';
+      ctx.fillStyle = isExtStruck
+        ? 'rgba(220, 38, 38, 0.08)'
+        : 'rgba(16, 185, 129, 0.08)';
+      ctx.strokeStyle = isExtStruck
+        ? 'rgba(220, 38, 38, 0.5)'
+        : 'rgba(5, 150, 105, 0.5)';
+      ctx.fillRect(px(15.8), py(17.9), px(12.4), py(2.5));
+      ctx.strokeRect(px(15.8), py(17.9), px(12.4), py(2.5));
+      ctx.restore();
     }
-    ctx.restore();
+
+    if (options.marketStrike !== 'none') {
+      ctx.save();
+      ctx.strokeStyle = options.inkColor;
+      ctx.lineWidth = fs(2.1);
+      ctx.lineCap = 'round';
+
+      if (
+        options.marketStrike === 'strike_external' ||
+        options.marketStrike === 'strike_both'
+      ) {
+        // Cross out "–الخارجية (1)"
+        ctx.beginPath();
+        ctx.moveTo(px(16.2), py(19.25));
+        ctx.lineTo(px(27.8), py(19.25));
+        ctx.stroke();
+      }
+
+      if (
+        options.marketStrike === 'strike_national' ||
+        options.marketStrike === 'strike_both'
+      ) {
+        // Cross out "– الوطنية."
+        ctx.beginPath();
+        ctx.moveTo(px(20.2), py(15.85));
+        ctx.lineTo(px(29.4), py(15.85));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 
   const pageFields = fields.filter((f) => f.page === pageNumber);

@@ -40,6 +40,28 @@ export async function renderUploadedPdfPagesToImages(
       canvas,
     }).promise;
 
+    // Remove light-gray highlight boxes on Page 1, 2, 3 while preserving dark ink & lines
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+    for (let p = 0; p < data.length; p += 4) {
+      const r = data[p];
+      const g = data[p + 1];
+      const b = data[p + 2];
+      // Neutral light-gray background highlight (typical Word/PDF gray shading ~160..242)
+      if (
+        r >= 150 &&
+        g >= 150 &&
+        b >= 150 &&
+        Math.abs(r - g) <= 12 &&
+        Math.abs(g - b) <= 12
+      ) {
+        data[p] = 255;
+        data[p + 1] = 255;
+        data[p + 2] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
     const dataUrl = canvas.toDataURL('image/png');
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
