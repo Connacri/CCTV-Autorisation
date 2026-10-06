@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { PdfFieldConfig } from '../data/pdfSchema';
+import { ChoiceCatalogItemEntity } from '../services/objectBoxStore';
 import { RenderOverlayOptions } from '../utils/pdfTemplateRenderer';
 import {
   generateFlutterMainDart,
+  generateFlutterObjectBoxEntities,
   generateFlutterPubspec,
 } from '../utils/flutterCodeGenerator';
 import { Check, Copy, Download } from 'lucide-react';
@@ -11,19 +13,30 @@ interface FlutterCodeViewProps {
   fields: PdfFieldConfig[];
   values: Record<string, string>;
   options: RenderOverlayOptions;
+  catalogItems: ChoiceCatalogItemEntity[];
 }
 
 export const FlutterCodeView: React.FC<FlutterCodeViewProps> = ({
   fields,
   values,
   options,
+  catalogItems,
 }) => {
-  const [activeFile, setActiveFile] = useState<'main.dart' | 'pubspec.yaml'>('main.dart');
+  const [activeFile, setActiveFile] = useState<
+    'main.dart' | 'objectbox_entities.dart' | 'pubspec.yaml'
+  >('main.dart');
   const [copied, setCopied] = useState(false);
 
   const mainDartCode = generateFlutterMainDart(fields, values, options);
+  const entitiesDartCode = generateFlutterObjectBoxEntities(catalogItems);
   const pubspecCode = generateFlutterPubspec();
-  const displayedCode = activeFile === 'main.dart' ? mainDartCode : pubspecCode;
+
+  const displayedCode =
+    activeFile === 'main.dart'
+      ? mainDartCode
+      : activeFile === 'objectbox_entities.dart'
+      ? entitiesDartCode
+      : pubspecCode;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(displayedCode);
@@ -44,31 +57,40 @@ export const FlutterCodeView: React.FC<FlutterCodeViewProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <p className="text-xs font-medium text-emerald-700">
-              Multiplateforme : Flutter Web · Android · iOS · Windows · macOS
+              Flutter Multiplateforme · ObjectBox NoSQL · Police Cairo RTL
             </p>
-            <h1 className="text-2xl font-bold text-slate-900 mt-1">
-              Code Source Complet Flutter & Dart (Police Cairo + Écriture Directe sur PDF)
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+              Code Complet Flutter & ObjectBox (Historique Lazy List + 14 Listes CRUD)
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => handleDownloadFile('pubspec.yaml', pubspecCode)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
             >
               <Download className="w-4 h-4" />
-              <span>Télécharger pubspec.yaml</span>
+              <span>pubspec.yaml</span>
+            </button>
+            <button
+              onClick={() =>
+                handleDownloadFile('objectbox_entities.dart', entitiesDartCode)
+              }
+              className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Download className="w-4 h-4" />
+              <span>lib/models/objectbox_entities.dart</span>
             </button>
             <button
               onClick={() => handleDownloadFile('main.dart', mainDartCode)}
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap"
             >
               <Download className="w-4 h-4" />
-              <span>Télécharger lib/main.dart</span>
+              <span>lib/main.dart</span>
             </button>
           </div>
         </div>
@@ -76,29 +98,30 @@ export const FlutterCodeView: React.FC<FlutterCodeViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-600">
           <div>
             <h2 className="font-semibold text-slate-900 text-sm">
-              1. Zéro modification du PDF original
+              1. Entités ObjectBox & Lazy List
             </h2>
             <p className="mt-1 leading-relaxed">
-              Le code utilise <code className="font-mono-tabular text-slate-800">PdfDocument(inputBytes: _originalPdfBytes)</code> de{' '}
-              <code className="font-mono-tabular text-slate-800">syncfusion_flutter_pdf</code> pour ouvrir votre PDF de 3 pages intact et dessiner uniquement les textes arabes aux coordonnées exactes.
+              Inclut <code className="font-mono-tabular text-slate-800">@Entity() class DossierSubmissionEntity</code> et{' '}
+              <code className="font-mono-tabular text-slate-800">ChoiceCatalogItemEntity</code> avec requêtes paginées{' '}
+              <code className="font-mono-tabular text-slate-800">..offset = offset ..limit = limit</code> et chargement infini via{' '}
+              <code className="font-mono-tabular text-slate-800">ScrollController</code>.
             </p>
           </div>
           <div>
             <h2 className="font-semibold text-slate-900 text-sm">
-              2. Police Cairo TrueType & RTL Arabe
+              2. 14 Listes de Choix CRUD intégrées
             </h2>
             <p className="mt-1 leading-relaxed">
-              Intègre <code className="font-mono-tabular text-slate-800">Cairo-SemiBold.ttf</code> via{' '}
-              <code className="font-mono-tabular text-slate-800">PdfTrueTypeFont</code> et configure{' '}
-              <code className="font-mono-tabular text-slate-800">PdfTextDirection.rightToLeft</code> pour garantir la liaison parfaite des lettres arabes dans chaque case.
+              Chaque champ catalogué (Entreprise d’installation agréée, Caméras, DVR, Communes, Transport, Sécurité) dispose d’un{' '}
+              <code className="font-mono-tabular text-slate-800">DropdownButtonFormField</code> relié à ObjectBox et d’une boîte de dialogue CRUD complète.
             </p>
           </div>
           <div>
             <h2 className="font-semibold text-slate-900 text-sm">
-              3. Synchronisé avec vos saisies actuelles
+              3. Quantités du Tableau PDF Centrées
             </h2>
             <p className="mt-1 leading-relaxed">
-              Les 49 coordonnées <code className="font-mono-tabular text-slate-800">(xLeftPct, xRightPct, yPct)</code> et les valeurs que vous avez saisies dans l’éditeur Web sont automatiquement injectées dans le code ci-dessous.
+              Les coordonnées verticales <code className="font-mono-tabular text-slate-800">yPct</code> des 4 quantités de la Page 3 (<code className="font-mono-tabular text-slate-800">58.4%</code>, <code className="font-mono-tabular text-slate-800">64.6%</code>, <code className="font-mono-tabular text-slate-800">69.0%</code>, <code className="font-mono-tabular text-slate-800">71.9%</code>) sont parfaitement centrées dans chaque case.
             </p>
           </div>
         </div>
@@ -106,8 +129,8 @@ export const FlutterCodeView: React.FC<FlutterCodeViewProps> = ({
 
       {/* Code Viewer */}
       <section className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden text-slate-100">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-800 bg-slate-950">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setActiveFile('main.dart')}
               className={`px-3 py-1.5 text-xs font-mono-tabular rounded-md transition-colors ${
@@ -116,7 +139,17 @@ export const FlutterCodeView: React.FC<FlutterCodeViewProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              lib/main.dart (49 champs Cairo RTL)
+              lib/main.dart
+            </button>
+            <button
+              onClick={() => setActiveFile('objectbox_entities.dart')}
+              className={`px-3 py-1.5 text-xs font-mono-tabular rounded-md transition-colors ${
+                activeFile === 'objectbox_entities.dart'
+                  ? 'bg-emerald-600 text-white font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              lib/models/objectbox_entities.dart ({catalogItems.length} options CRUD)
             </button>
             <button
               onClick={() => setActiveFile('pubspec.yaml')}
@@ -137,7 +170,7 @@ export const FlutterCodeView: React.FC<FlutterCodeViewProps> = ({
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400">Copié dans le presse-papiers</span>
+                <span className="text-emerald-400">Copié</span>
               </>
             ) : (
               <>

@@ -128,10 +128,10 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
           const isSelected = activeFieldId === field.id;
           const leftPct = Math.max(0, field.xLeft + options.globalOffsetX);
           const widthPct = Math.max(4, field.xRight - field.xLeft);
-          const heightPct = field.multiline ? field.height || 5.5 : 2.6;
+          const heightPct = field.multiline ? field.height || 5.5 : 2.4;
           const topPct = field.multiline
             ? field.y + options.globalOffsetY - 1.3
-            : field.y + options.globalOffsetY - 2.05;
+            : field.y + options.globalOffsetY - 1.85;
 
           const val = values[field.id] || '';
           const scaledFontSizePx = Math.max(

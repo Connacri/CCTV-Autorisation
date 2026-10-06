@@ -1,5 +1,115 @@
 export type FieldAlignment = 'right' | 'center' | 'left';
 
+export type CatalogCategoryKey =
+  | 'installer_company'
+  | 'indoor_cam_model'
+  | 'outdoor_cam_model'
+  | 'recorder_designation'
+  | 'recorder_model'
+  | 'authority_issued_by'
+  | 'doc_location'
+  | 'nationality'
+  | 'profession'
+  | 'activity_type'
+  | 'origin_country'
+  | 'provenance_country'
+  | 'transport_method'
+  | 'security_conditions';
+
+export interface CatalogCategoryMeta {
+  key: CatalogCategoryKey;
+  titleAr: string;
+  titleFr: string;
+  descriptionFr: string;
+}
+
+export const CATALOG_CATEGORIES: CatalogCategoryMeta[] = [
+  {
+    key: 'installer_company',
+    titleAr: 'مؤسسات تركيب الكاميرات المعتمدة (6)',
+    titleFr: 'Entreprises d’installation agréées (Page 3)',
+    descriptionFr: 'Références d’agrément et adresses des installateurs de systèmes de vidéosurveillance.',
+  },
+  {
+    key: 'indoor_cam_model',
+    titleAr: 'كاميرات المراقبة الداخلية (النوع والعلامة والنموذج)',
+    titleFr: 'Modèles de caméras intérieures sans IR (Tableau Page 3)',
+    descriptionFr: 'Catalogue des caméras intérieures autorisées (sans infrarouge).',
+  },
+  {
+    key: 'outdoor_cam_model',
+    titleAr: 'كاميرات المراقبة الخارجية (النوع والعلامة والنموذج)',
+    titleFr: 'Modèles de caméras extérieures sans IR (Tableau Page 3)',
+    descriptionFr: 'Catalogue des caméras extérieures autorisées (sans infrarouge).',
+  },
+  {
+    key: 'recorder_designation',
+    titleAr: 'تعيين نوع المسجل (DVR / NVR)',
+    titleFr: 'Désignation du type d’enregistreur (Tableau Page 3)',
+    descriptionFr: 'Types d’enregistreurs vidéo numériques en circuit fermé.',
+  },
+  {
+    key: 'recorder_model',
+    titleAr: 'طبيعة المسجل (العلامة والنموذج والرقم التسلسلي)',
+    titleFr: 'Modèles d’enregistreurs DVR / NVR (Tableau Page 3)',
+    descriptionFr: 'Références techniques des enregistreurs non connectés à Internet.',
+  },
+  {
+    key: 'authority_issued_by',
+    titleAr: 'هيئات إصدار بطاقة التعريف وجواز السفر',
+    titleFr: 'Autorités de délivrance CNI / Passeport (Page 2)',
+    descriptionFr: 'Communes et Daïras de délivrance des pièces d’identité.',
+  },
+  {
+    key: 'doc_location',
+    titleAr: 'مكان تحرير الوثيقة (حرر بـ)',
+    titleFr: 'Lieux de signature (Pages 1, 2 et 3)',
+    descriptionFr: 'Communes ou villes de signature du dossier.',
+  },
+  {
+    key: 'nationality',
+    titleAr: 'الجنسية',
+    titleFr: 'Nationalités (Pages 2 et 3)',
+    descriptionFr: 'Nationalité du demandeur.',
+  },
+  {
+    key: 'profession',
+    titleAr: 'المهنة (4)',
+    titleFr: 'Professions / Fonctions (Page 3)',
+    descriptionFr: 'Qualité ou profession du demandeur.',
+  },
+  {
+    key: 'activity_type',
+    titleAr: 'نوع النشاطات (5)',
+    titleFr: 'Natures d’activités (Page 3)',
+    descriptionFr: 'Secteurs d’activité de l’entreprise ou de l’établissement.',
+  },
+  {
+    key: 'origin_country',
+    titleAr: 'بلد منشأ التجهيزات',
+    titleFr: 'Pays d’origine des équipements (Page 3)',
+    descriptionFr: 'Pays de fabrication initiale des équipements.',
+  },
+  {
+    key: 'provenance_country',
+    titleAr: 'بلد قدوم التجهيزات',
+    titleFr: 'Pays / Marché de provenance (Page 3)',
+    descriptionFr: 'Marché national ou pays de provenance directe.',
+  },
+  {
+    key: 'transport_method',
+    titleAr: 'كيفيات نقل التجهيزات',
+    titleFr: 'Modalités de transport (Page 3)',
+    descriptionFr: 'Moyens logistiques de transport du matériel après autorisation.',
+  },
+  {
+    key: 'security_conditions',
+    titleAr: 'شروط حفظ التجهيزات في مأمن',
+    titleFr: 'Conditions de conservation en lieu sûr (Page 3)',
+    descriptionFr: 'Dispositifs physiques de sécurisation de l’enregistreur et des équipements.',
+  },
+];
+
 export interface PdfFieldConfig {
   id: string;
   page: 1 | 2 | 3;
@@ -25,7 +135,6 @@ export interface PdfFieldConfig {
   multiline?: boolean;
   /**
    * Optional shared key for automatic cross-page synchronization
-   * (e.g., applicant name, birth date, birth place, nationality, installation address, issue place, issue date)
    */
   syncKey?:
     | 'applicant_name'
@@ -35,6 +144,10 @@ export interface PdfFieldConfig {
     | 'installation_address'
     | 'doc_location'
     | 'doc_date';
+  /**
+   * Optional ObjectBox CRUD choice list category associated with this field
+   */
+  catalogCategory?: CatalogCategoryKey;
 }
 
 export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
@@ -89,6 +202,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'doc_location',
+    catalogCategory: 'doc_location',
   },
   {
     id: 'p1_date',
@@ -227,6 +341,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'center',
     fontSize: 11.5,
     dir: 'rtl',
+    catalogCategory: 'authority_issued_by',
   },
   {
     id: 'p2_id_issue_date',
@@ -269,6 +384,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11.5,
     dir: 'rtl',
+    catalogCategory: 'authority_issued_by',
   },
   {
     id: 'p2_passport_issue_date',
@@ -312,6 +428,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'nationality',
+    catalogCategory: 'nationality',
   },
   {
     id: 'p2_company_name',
@@ -411,6 +528,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'doc_location',
+    catalogCategory: 'doc_location',
   },
   {
     id: 'p2_date',
@@ -506,6 +624,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'nationality',
+    catalogCategory: 'nationality',
   },
   {
     id: 'p3_installation_address',
@@ -539,6 +658,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 12,
     dir: 'rtl',
+    catalogCategory: 'profession',
   },
   {
     id: 'p3_activity_type',
@@ -555,6 +675,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11.5,
     dir: 'rtl',
+    catalogCategory: 'activity_type',
   },
   {
     id: 'p3_installer_ref_address',
@@ -569,9 +690,11 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11,
     dir: 'rtl',
+    catalogCategory: 'installer_company',
   },
 
   // --- TABLEAU DES ÉQUIPEMENTS SENSIBLES (PAGE 3) ---
+  // Note: Vertical positions of quantities adjusted lower (58.4, 64.6, 69.0, 71.9) to sit dead-center in their cells
   {
     id: 'p3_indoor_cam_nature',
     page: 3,
@@ -587,6 +710,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 10,
     dir: 'rtl',
     multiline: true,
+    catalogCategory: 'indoor_cam_model',
   },
   {
     id: 'p3_indoor_cam_qty',
@@ -597,7 +721,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: '04',
     xLeft: 4.0,
     xRight: 20.8,
-    y: 56.8,
+    y: 58.4,
     align: 'center',
     fontSize: 13,
     dir: 'ltr',
@@ -617,6 +741,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 10,
     dir: 'rtl',
     multiline: true,
+    catalogCategory: 'outdoor_cam_model',
   },
   {
     id: 'p3_outdoor_cam_qty',
@@ -627,7 +752,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: '02',
     xLeft: 4.0,
     xRight: 20.8,
-    y: 63.0,
+    y: 64.6,
     align: 'center',
     fontSize: 13,
     dir: 'ltr',
@@ -641,10 +766,11 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: 'مسجل فيديو رقمي DVR 08 قنوات',
     xLeft: 76.8,
     xRight: 95.6,
-    y: 70.3,
+    y: 71.0,
     align: 'center',
     fontSize: 10,
     dir: 'rtl',
+    catalogCategory: 'recorder_designation',
   },
   {
     id: 'p3_recorder_nature',
@@ -661,6 +787,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 10,
     dir: 'rtl',
     multiline: true,
+    catalogCategory: 'recorder_model',
   },
   {
     id: 'p3_recorder_qty',
@@ -671,7 +798,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: '01',
     xLeft: 4.0,
     xRight: 20.8,
-    y: 67.6,
+    y: 69.0,
     align: 'center',
     fontSize: 12.5,
     dir: 'ltr',
@@ -685,7 +812,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: '07',
     xLeft: 3.6,
     xRight: 12.2,
-    y: 70.6,
+    y: 71.9,
     align: 'center',
     fontSize: 12.5,
     dir: 'ltr',
@@ -706,6 +833,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     fontSize: 11,
     dir: 'rtl',
     syncKey: 'doc_location',
+    catalogCategory: 'doc_location',
   },
   {
     id: 'p3_date',
@@ -735,6 +863,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11,
     dir: 'rtl',
+    catalogCategory: 'origin_country',
   },
   {
     id: 'p3_provenance_country',
@@ -749,6 +878,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11,
     dir: 'rtl',
+    catalogCategory: 'provenance_country',
   },
   {
     id: 'p3_transport_method',
@@ -763,6 +893,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11,
     dir: 'rtl',
+    catalogCategory: 'transport_method',
   },
   {
     id: 'p3_storage_use_places',
@@ -791,6 +922,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     align: 'right',
     fontSize: 11,
     dir: 'rtl',
+    catalogCategory: 'security_conditions',
   },
 ];
 
@@ -839,7 +971,7 @@ export const SAMPLE_ARABIC_VALUES: Record<string, string> = {
   p3_indoor_cam_qty: '04',
   p3_outdoor_cam_nature: 'كاميرا خارجية نهارية بدون أشعة حمراء HIKVISION DS-2CE16D0T\nالرقم التسلسلي: HK-2026-005 إلى HK-2026-006',
   p3_outdoor_cam_qty: '02',
-  p3_recorder_designation: 'مسجل فيديو رقمي DVR',
+  p3_recorder_designation: 'مسجل فيديو رقمي DVR 08 قنوات',
   p3_recorder_nature: 'مسجل رقمي HIKVISION DVR-7208HQHI-K1 (بدون ربط بالأنترنت)\nالرقم التسلسلي: SN-98451200',
   p3_recorder_qty: '01',
   p3_total_qty: '07',
@@ -915,7 +1047,7 @@ export const PDF_DEEP_ANALYSIS: PageDeepAnalysis[] = [
     fieldCount: 23,
     technicalObservations: [
       'Tableau à 5 colonnes (RTL) : Colonne 1 (تعيين التجهيزات : 76.2%–96.2%), Colonne 2 (طبيعة التجهيزات والرقم التسلسلي : 47.7%–76.2%), Colonne 3 (القسم ج : 35.7%–47.7%), Colonne 4 (القسم الفرعي 01 : 21.4%–35.7%), Colonne 5 (الكمية والمجموع : 3.2%–21.4%).',
-      'Cellule Total scindée : Le bas de la colonne "الكمية" est divisé verticalement entre le libellé "المجموع" à droite (12.5%–21.4%) et la case de valeur totale à gauche (3.2%–12.5%).',
+      'Alignement vertical des quantités calibré : Les 4 cellules de quantité (58.4%, 64.6%, 69.0%, 71.9%) sont centrées au cœur de chaque ligne du tableau.',
     ],
   },
 ];

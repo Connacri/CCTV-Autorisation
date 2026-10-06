@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  CatalogCategoryKey,
   INITIAL_PDF_FIELDS,
   PdfFieldConfig,
   SAMPLE_ARABIC_VALUES,
@@ -12,9 +13,17 @@ import {
   exportFilledPdf,
   renderUploadedPdfPagesToImages,
 } from './utils/pdfExporter';
+import {
+  ChoiceCatalogItemEntity,
+  DossierSubmissionEntity,
+  objectBoxStore,
+} from './services/objectBoxStore';
+import { AppLocale, TRANSLATIONS } from './i18n/translations';
 import { PdfPageCanvas } from './components/PdfPageCanvas';
 import { DeepAnalysisView } from './components/DeepAnalysisView';
 import { FlutterCodeView } from './components/FlutterCodeView';
+import { ObjectBoxHistoryView } from './components/ObjectBoxHistoryView';
+import { CrudCatalogView } from './components/CrudCatalogView';
 import {
   Download,
   Upload,
@@ -26,17 +35,38 @@ import {
   Eye,
   Edit3,
   CheckCircle2,
+  Database,
+  Plus,
+  Settings2,
 } from 'lucide-react';
 
-type ActiveTab = 'workspace' | 'analysis' | 'flutter_code';
+type ActiveTab =
+  | 'workspace'
+  | 'history'
+  | 'catalog_crud'
+  | 'analysis'
+  | 'flutter_code';
 
 export default function App() {
+  const [locale, setLocale] = useState<AppLocale>('fr');
+  const t = TRANSLATIONS[locale];
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('workspace');
+  const [mobileWorkspacePane, setMobileWorkspacePane] = useState<'form' | 'pdf'>('form');
   const [fields, setFields] = useState<PdfFieldConfig[]>(INITIAL_PDF_FIELDS);
   const [values, setValues] = useState<Record<string, string>>(SAMPLE_ARABIC_VALUES);
   const [selectedPage, setSelectedPage] = useState<1 | 2 | 3>(1);
   const [viewAllPages, setViewAllPages] = useState<boolean>(false);
   const [activeFieldId, setActiveFieldId] = useState<string | null>('p1_applicant_name');
+
+  // ObjectBox state
+  const [activeDossierId, setActiveDossierId] = useState<number | null>(1);
+  const [catalogItems, setCatalogItems] = useState<ChoiceCatalogItemEntity[]>(() =>
+    objectBoxStore.getAllCatalogItems()
+  );
+  const [focusedCatalogCategory, setFocusedCatalogCategory] =
+    useState<CatalogCategoryKey>('installer_company');
+  const [historyRefreshCount, setHistoryRefreshCount] = useState<number>(0);
 
   // Auto-sync shared fields across Pages 1, 2, 3
   const [autoSync, setAutoSync] = useState<boolean>(true);
@@ -65,6 +95,10 @@ export default function App() {
     showFieldBoxes: true,
     activeFieldId: 'p1_applicant_name',
   });
+
+  const refreshCatalogFromObjectBox = () => {
+    setCatalogItems(objectBoxStore.getAllCatalogItems());
+  };
 
   const handleUpdateValue = (fieldId: string, newValue: string) => {
     const targetField = fields.find((f) => f.id === fieldId);
@@ -95,6 +129,59 @@ export default function App() {
 
       return next;
     });
+  };
+
+  const handleSaveCurrentDossierToObjectBox = (asNew = false) => {
+    const saved = objectBoxStore.putDossier({
+      id: asNew ? undefined : activeDossierId || undefined,
+      values,
+      marketStrike: overlayOptions.marketStrike,
+    });
+    setActiveDossierId(saved.id);
+    setHistoryRefreshCount((c) => c + 1);
+    setStatusBanner(`${t.savedToObjectBoxToast} (ID #${saved.id})`);
+    setTimeout(() => setStatusBanner(null), 4500);
+  };
+
+  const handleLoadDossierFromObjectBox = (dossier: DossierSubmissionEntity) => {
+    setValues({ ...dossier.values });
+    setActiveDossierId(dossier.id);
+    setOverlayOptions((prev) => ({
+      ...prev,
+      marketStrike: dossier.marketStrike,
+    }));
+    setActiveTab('workspace');
+    setStatusBanner(
+      `Dossier ObjectBox #${dossier.id} (« ${dossier.applicantName} ») chargé sur les 3 pages du PDF.`
+    );
+    setTimeout(() => setStatusBanner(null), 4500);
+  };
+
+  const handleQuickSaveFieldToCatalog = (field: PdfFieldConfig, currentVal: string) => {
+    if (!field.catalogCategory || !currentVal.trim()) return;
+    objectBoxStore.putChoice({
+      categoryKey: field.catalogCategory,
+      valueAr: currentVal.trim(),
+      noteFr: `${field.labelFr} (Ajouté depuis le formulaire)`,
+    });
+    refreshCatalogFromObjectBox();
+    setStatusBanner(
+      `Valeur « ${currentVal.trim()} » ajoutée dans la liste de choix ObjectBox (${field.catalogCategory}).`
+    );
+    setTimeout(() => setStatusBanner(null), 4500);
+  };
+
+  const handleApplyChoiceFromCrudModal = (
+    categoryKey: CatalogCategoryKey,
+    valueAr: string
+  ) => {
+    const matchingFields = fields.filter((f) => f.catalogCategory === categoryKey);
+    if (matchingFields.length > 0) {
+      handleUpdateValue(matchingFields[0].id, valueAr);
+      setSelectedPage(matchingFields[0].page);
+      setActiveFieldId(matchingFields[0].id);
+      setActiveTab('workspace');
+    }
   };
 
   const handleSelectField = (fieldId: string) => {
@@ -143,6 +230,15 @@ export default function App() {
   const handleDownloadPdf = async () => {
     setIsExporting(true);
     try {
+      // Automatically persist in ObjectBox history on PDF export
+      const saved = objectBoxStore.putDossier({
+        id: activeDossierId || undefined,
+        values,
+        marketStrike: overlayOptions.marketStrike,
+      });
+      setActiveDossierId(saved.id);
+      setHistoryRefreshCount((c) => c + 1);
+
       await exportFilledPdf({
         originalPdfBuffer,
         fields,
@@ -153,7 +249,7 @@ export default function App() {
           : 'Dossier_Equipements_Sensibles_Oran_Cairo.pdf',
       });
       setStatusBanner(
-        'PDF généré avec succès avec la police Cairo ! Vérifiez vos téléchargements.'
+        `PDF généré en police Cairo et sauvegardé dans l'historique ObjectBox (#${saved.id}) !`
       );
       setTimeout(() => setStatusBanner(null), 5000);
     } catch (err) {
@@ -181,7 +277,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Top Navigation Bar following strict 3-Zone Contract */}
-      <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-slate-200 sticky top-0 z-30">
+      <header className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200 sticky top-0 z-30">
         {/* Zone 1: Single text element Brand Wordmark */}
         <a
           href="#top"
@@ -189,13 +285,13 @@ export default function App() {
             e.preventDefault();
             setActiveTab('workspace');
           }}
-          className="text-base font-bold tracking-tight text-slate-900 whitespace-nowrap"
+          className="text-sm sm:text-base font-bold tracking-tight text-slate-900 whitespace-nowrap"
         >
-          DRAG Oran · Studio PDF Cairo
+          {t.brandTitle}
         </a>
 
-        {/* Zone 2: Clean navigation links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
+        {/* Zone 2: 5 Clean single-line navigation links */}
+        <nav className="hidden xl:flex items-center gap-5 text-xs font-medium text-slate-600">
           <button
             onClick={() => setActiveTab('workspace')}
             className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
@@ -204,7 +300,27 @@ export default function App() {
                 : 'border-transparent hover:text-slate-900'
             }`}
           >
-            Formulaire & Aperçu PDF
+            {t.navWorkspace}
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
+              activeTab === 'history'
+                ? 'border-emerald-700 text-slate-900 font-semibold'
+                : 'border-transparent hover:text-slate-900'
+            }`}
+          >
+            {t.navHistory}
+          </button>
+          <button
+            onClick={() => setActiveTab('catalog_crud')}
+            className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
+              activeTab === 'catalog_crud'
+                ? 'border-emerald-700 text-slate-900 font-semibold'
+                : 'border-transparent hover:text-slate-900'
+            }`}
+          >
+            {t.navCatalogCrud}
           </button>
           <button
             onClick={() => setActiveTab('analysis')}
@@ -214,7 +330,7 @@ export default function App() {
                 : 'border-transparent hover:text-slate-900'
             }`}
           >
-            Analyse Approfondie (3 Pages)
+            {t.navAnalysis}
           </button>
           <button
             onClick={() => setActiveTab('flutter_code')}
@@ -224,12 +340,21 @@ export default function App() {
                 : 'border-transparent hover:text-slate-900'
             }`}
           >
-            Code Flutter & Web (Cairo)
+            {t.navFlutterCode}
           </button>
         </nav>
 
-        {/* Zone 3: 2 Primary Actions (Upload Original PDF + Download Filled PDF) */}
-        <div className="flex items-center gap-2.5">
+        {/* Zone 3: Primary Actions */}
+        <div className="flex items-center gap-2">
+          {/* FR / EN Language Switcher */}
+          <button
+            onClick={() => setLocale((l) => (l === 'fr' ? 'en' : 'fr'))}
+            className="px-2.5 py-1.5 text-xs font-mono-tabular font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors uppercase whitespace-nowrap"
+            title="Switch Language FR / EN"
+          >
+            {locale}
+          </button>
+
           <input
             ref={fileInputRef}
             type="file"
@@ -239,61 +364,82 @@ export default function App() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
-            title="Charger votre fichier PDF original sans le modifier"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
           >
             <Upload className="w-3.5 h-3.5" />
             <span>
-              {originalPdfName ? 'Changer le PDF original' : 'Charger PDF original (.pdf)'}
+              {originalPdfName ? t.changeOriginalPdf : t.uploadOriginalPdf}
             </span>
           </button>
 
           <button
             onClick={handleDownloadPdf}
             disabled={isExporting}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>
-              {isExporting
-                ? 'Écriture Cairo en cours...'
-                : 'Télécharger le PDF rempli (Cairo)'}
-            </span>
+            <span>{isExporting ? t.exportingPdf : t.downloadFilledPdf}</span>
           </button>
         </div>
       </header>
 
-      {/* Mobile Tab Switcher */}
-      <div className="flex md:hidden items-center justify-around bg-white border-b border-slate-200 px-3 py-2 text-xs font-medium">
+      {/* Responsive Tablet / Mobile Navigation Bar */}
+      <div className="flex xl:hidden items-center gap-1 overflow-x-auto bg-white border-b border-slate-200 px-3 py-2 text-xs font-medium">
         <button
           onClick={() => setActiveTab('workspace')}
-          className={`px-3 py-1.5 rounded-md ${
-            activeTab === 'workspace' ? 'bg-emerald-50 text-emerald-800 font-semibold' : 'text-slate-600'
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'workspace'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+              : 'text-slate-600'
           }`}
         >
-          Formulaire & PDF
+          {t.navWorkspace}
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'history'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+              : 'text-slate-600'
+          }`}
+        >
+          {t.navHistory}
+        </button>
+        <button
+          onClick={() => setActiveTab('catalog_crud')}
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'catalog_crud'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+              : 'text-slate-600'
+          }`}
+        >
+          {t.navCatalogCrud}
         </button>
         <button
           onClick={() => setActiveTab('analysis')}
-          className={`px-3 py-1.5 rounded-md ${
-            activeTab === 'analysis' ? 'bg-emerald-50 text-emerald-800 font-semibold' : 'text-slate-600'
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'analysis'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+              : 'text-slate-600'
           }`}
         >
-          Analyse (3 Pages)
+          {t.navAnalysis}
         </button>
         <button
           onClick={() => setActiveTab('flutter_code')}
-          className={`px-3 py-1.5 rounded-md ${
-            activeTab === 'flutter_code' ? 'bg-emerald-50 text-emerald-800 font-semibold' : 'text-slate-600'
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'flutter_code'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+              : 'text-slate-600'
           }`}
         >
-          Code Flutter
+          {t.navFlutterCode}
         </button>
       </div>
 
-      {/* Status notification bar if active */}
+      {/* Status notification bar */}
       {statusBanner && (
-        <div className="bg-emerald-900 text-emerald-50 px-6 py-2.5 text-xs flex items-center justify-between">
+        <div className="bg-emerald-900 text-emerald-50 px-4 sm:px-6 py-2.5 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{statusBanner}</span>
@@ -302,13 +448,29 @@ export default function App() {
             onClick={() => setStatusBanner(null)}
             className="text-emerald-200 hover:text-white underline text-xs ml-4 whitespace-nowrap"
           >
-            Fermer
+            OK
           </button>
         </div>
       )}
 
-      {/* Main Content View */}
-      {activeTab === 'analysis' ? (
+      {/* Main Content Router */}
+      {activeTab === 'history' ? (
+        <ObjectBoxHistoryView
+          t={t}
+          activeDossierId={activeDossierId}
+          onLoadDossier={handleLoadDossierFromObjectBox}
+          onSaveCurrentToObjectBox={() => handleSaveCurrentDossierToObjectBox(true)}
+          refreshTrigger={historyRefreshCount}
+        />
+      ) : activeTab === 'catalog_crud' ? (
+        <CrudCatalogView
+          t={t}
+          initialCategory={focusedCatalogCategory}
+          catalogItems={catalogItems}
+          onRefreshCatalog={refreshCatalogFromObjectBox}
+          onApplyChoiceToForm={handleApplyChoiceFromCrudModal}
+        />
+      ) : activeTab === 'analysis' ? (
         <DeepAnalysisView
           fields={fields}
           values={values}
@@ -323,41 +485,79 @@ export default function App() {
           fields={fields}
           values={values}
           options={overlayOptions}
+          catalogItems={catalogItems}
         />
       ) : (
-        /* WORKSPACE VIEW: Split Form Editor (Left) + Live 1:1 PDF Canvas (Right) */
-        <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-[calc(100vh-57px)]">
-          {/* LEFT PANEL: Structured Arabic Form (Cairo Font) + Coordinate Calibration */}
-          <section className="lg:col-span-5 xl:col-span-5 bg-white border-r border-slate-200 flex flex-col h-[calc(100vh-57px)]">
+        /* WORKSPACE VIEW: Responsive Split Form Editor + Live 1:1 PDF Canvas */
+        <main className="flex-1 flex flex-col lg:grid lg:grid-cols-12 min-h-[calc(100vh-57px)]">
+          {/* Mobile Form / PDF Switcher */}
+          <div className="flex lg:hidden items-center gap-2 p-2 bg-slate-100 border-b border-slate-200">
+            <button
+              onClick={() => setMobileWorkspacePane('form')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                mobileWorkspacePane === 'form'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600'
+              }`}
+            >
+              1. Formulaire & Listes ObjectBox
+            </button>
+            <button
+              onClick={() => setMobileWorkspacePane('pdf')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                mobileWorkspacePane === 'pdf'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600'
+              }`}
+            >
+              2. Aperçu Direct sur PDF (Cairo)
+            </button>
+          </div>
+
+          {/* LEFT PANEL: Structured Arabic Form + ObjectBox Choice Lists + Coordinate Calibration */}
+          <section
+            className={`${
+              mobileWorkspacePane === 'form' ? 'flex' : 'hidden lg:flex'
+            } lg:col-span-5 xl:col-span-5 bg-white border-r border-slate-200 flex-col lg:h-[calc(100vh-57px)]`}
+          >
             {/* Form Top Controls */}
             <div className="p-4 border-b border-slate-200 space-y-3 bg-slate-50/60">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h1 className="text-sm font-bold text-slate-900">
-                    Saisie des Cases en Arabe (Police Cairo)
+                    {t.formPanelTitle}
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5 font-mono-tabular">
-                    {totalFilledCount} / {fields.length} champs remplis ·{' '}
+                    {totalFilledCount} / {fields.length} {t.fieldsFilledLabel} ·{' '}
                     {originalPdfName
-                      ? `PDF actif : ${originalPdfName}`
-                      : 'Modèle officiel Wilaya d’Oran 1:1'}
+                      ? `${t.activePdfLabel} ${originalPdfName}`
+                      : t.officialModelActive}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    onClick={() => handleSaveCurrentDossierToObjectBox(true)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors whitespace-nowrap"
+                    title="Enregistrer ce dossier dans l'historique ObjectBox"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>+ ObjectBox</span>
+                  </button>
                   <button
                     onClick={() => setValues(SAMPLE_ARABIC_VALUES)}
                     className="px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors whitespace-nowrap"
-                    title="Pré-remplir toutes les cases avec un exemple complet en arabe"
                   >
-                    Exemple Oran
+                    {t.btnSampleOran}
                   </button>
                   <button
-                    onClick={() => setValues({})}
+                    onClick={() => {
+                      setValues({});
+                      setActiveDossierId(null);
+                    }}
                     className="px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap"
-                    title="Vider tous les champs"
                   >
-                    Vider
+                    {t.btnClear}
                   </button>
                   <button
                     onClick={() => setShowCalibration((v) => !v)}
@@ -368,7 +568,7 @@ export default function App() {
                     }`}
                   >
                     <Sliders className="w-3.5 h-3.5" />
-                    <span>Calibrer</span>
+                    <span>{t.btnCalibrate}</span>
                   </button>
                 </div>
               </div>
@@ -416,12 +616,12 @@ export default function App() {
                     onChange={(e) => setAutoSync(e.target.checked)}
                     className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
                   />
-                  <span>Synchroniser les champs communs (Pages 1, 2, 3)</span>
+                  <span>{t.autoSyncLabel}</span>
                 </label>
 
                 {selectedPage === 3 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-slate-500">Marché (1) :</span>
+                    <span className="text-slate-500">{t.marketLabel}</span>
                     <select
                       value={overlayOptions.marketStrike}
                       onChange={(e) =>
@@ -432,13 +632,9 @@ export default function App() {
                       }
                       className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-white font-cairo"
                     >
-                      <option value="strike_external">
-                        السوق الوطنية (شطب الخارجية)
-                      </option>
-                      <option value="strike_national">
-                        السوق الخارجية (شطب الوطنية)
-                      </option>
-                      <option value="none">بدون شطب إضافي</option>
+                      <option value="strike_external">{t.marketNational}</option>
+                      <option value="strike_national">{t.marketExternal}</option>
+                      <option value="none">{t.marketNone}</option>
                     </select>
                   </div>
                 )}
@@ -513,48 +709,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-slate-500 mb-1 font-mono-tabular">
-                        Décalage Horizontal Global X ({overlayOptions.globalOffsetX.toFixed(1)}%)
-                      </label>
-                      <input
-                        type="range"
-                        min="-3"
-                        max="3"
-                        step="0.1"
-                        value={overlayOptions.globalOffsetX}
-                        onChange={(e) =>
-                          setOverlayOptions((p) => ({
-                            ...p,
-                            globalOffsetX: parseFloat(e.target.value),
-                          }))
-                        }
-                        className="w-full accent-emerald-700"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-500 mb-1 font-mono-tabular">
-                        Décalage Vertical Global Y ({overlayOptions.globalOffsetY.toFixed(1)}%)
-                      </label>
-                      <input
-                        type="range"
-                        min="-3"
-                        max="3"
-                        step="0.1"
-                        value={overlayOptions.globalOffsetY}
-                        onChange={(e) =>
-                          setOverlayOptions((p) => ({
-                            ...p,
-                            globalOffsetY: parseFloat(e.target.value),
-                          }))
-                        }
-                        className="w-full accent-emerald-700"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Fine-tuning of the currently selected field */}
                   {activeFieldObj && (
                     <div className="pt-2 border-t border-slate-100 space-y-2">
                       <div className="flex items-center justify-between">
@@ -645,6 +799,15 @@ export default function App() {
                 const prevSection = index > 0 ? currentPageFields[index - 1].section : null;
                 const showSectionHeader = field.section !== prevSection;
 
+                const fieldChoices = field.catalogCategory
+                  ? catalogItems.filter((c) => c.categoryKey === field.catalogCategory)
+                  : [];
+
+                const isValueAlreadyInCatalog =
+                  field.catalogCategory &&
+                  val.trim().length > 0 &&
+                  fieldChoices.some((c) => c.valueAr.trim() === val.trim());
+
                 return (
                   <React.Fragment key={field.id}>
                     {showSectionHeader && (
@@ -684,6 +847,61 @@ export default function App() {
                         </label>
                       </div>
 
+                      {/* ObjectBox Choice Selector + CRUD Manager Button if field has catalogCategory */}
+                      {field.catalogCategory && (
+                        <div className="mb-2 space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={isValueAlreadyInCatalog ? val.trim() : ''}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleUpdateValue(field.id, e.target.value);
+                                }
+                              }}
+                              className="flex-1 min-w-0 text-xs border border-emerald-200 bg-emerald-50/50 text-slate-800 rounded-md px-2.5 py-1.5 font-cairo font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                            >
+                              <option value="">
+                                ▾ {t.chooseFromObjectBox} ({fieldChoices.length})
+                              </option>
+                              {fieldChoices.map((choice) => (
+                                <option key={choice.id} value={choice.valueAr}>
+                                  {choice.valueAr.replace(/\n/g, ' — ')} ({choice.noteFr})
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFocusedCatalogCategory(field.catalogCategory!);
+                                setActiveTab('catalog_crud');
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200/80 rounded-md transition-colors whitespace-nowrap shrink-0"
+                              title={t.manageCrudList}
+                            >
+                              <Settings2 className="w-3.5 h-3.5" />
+                              <span>CRUD ({fieldChoices.length})</span>
+                            </button>
+                          </div>
+
+                          {/* 1-Click button to save a newly typed value directly into ObjectBox choice list */}
+                          {val.trim().length > 0 && !isValueAlreadyInCatalog && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickSaveFieldToCatalog(field, val);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-emerald-900 underline-offset-2 hover:underline"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>{t.saveCurrentValueToList}</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {field.multiline ? (
                         <textarea
                           dir={field.dir}
@@ -722,7 +940,11 @@ export default function App() {
           </section>
 
           {/* RIGHT PANEL: Live Interactive PDF Viewer & Direct On-Page Cairo Editor */}
-          <section className="lg:col-span-7 xl:col-span-7 bg-slate-200/80 flex flex-col h-[calc(100vh-57px)]">
+          <section
+            className={`${
+              mobileWorkspacePane === 'pdf' ? 'flex' : 'hidden lg:flex'
+            } lg:col-span-7 xl:col-span-7 bg-slate-200/80 flex-col lg:h-[calc(100vh-57px)]`}
+          >
             {/* PDF Preview Toolbar */}
             <div className="px-4 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               {/* Page Navigation */}
@@ -751,12 +973,12 @@ export default function App() {
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  Vue 3 Pages
+                  {t.all3PagesView}
                 </button>
               </div>
 
               {/* Interactive Overlay & Zoom Controls */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setDirectEditOnPdf((v) => !v)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
@@ -764,10 +986,9 @@ export default function App() {
                       ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                       : 'bg-slate-100 text-slate-600'
                   }`}
-                  title="Cliquer directement sur les pointillés du PDF pour écrire en arabe"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>Écriture directe sur PDF</span>
+                  <span>{t.directEditPdf}</span>
                 </button>
 
                 <button
@@ -782,17 +1003,17 @@ export default function App() {
                       ? 'bg-blue-50 text-blue-800 border border-blue-200'
                       : 'bg-slate-100 text-slate-600'
                   }`}
-                  title="Afficher ou masquer les cadres de repérage des 49 zones"
                 >
                   <Eye className="w-3.5 h-3.5" />
-                  <span>Cadres ({fields.length})</span>
+                  <span>
+                    {t.showBoxes} ({fields.length})
+                  </span>
                 </button>
 
                 <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5 font-mono-tabular text-xs">
                   <button
-                    onClick={() => setZoom((z) => Math.max(0.65, +(z - 0.1).toFixed(2)))}
+                    onClick={() => setZoom((z) => Math.max(0.55, +(z - 0.1).toFixed(2)))}
                     className="p-1 text-slate-600 hover:text-slate-900"
-                    title="Zoom arrière"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
@@ -802,7 +1023,6 @@ export default function App() {
                   <button
                     onClick={() => setZoom((z) => Math.min(1.35, +(z + 0.1).toFixed(2)))}
                     className="p-1 text-slate-600 hover:text-slate-900"
-                    title="Zoom avant"
                   >
                     <ZoomIn className="w-3.5 h-3.5" />
                   </button>
@@ -811,7 +1031,7 @@ export default function App() {
             </div>
 
             {/* Scrollable PDF Canvas Container */}
-            <div className="flex-1 overflow-auto p-6 space-y-8">
+            <div className="flex-1 overflow-auto p-3 sm:p-6 space-y-8">
               {viewAllPages ? (
                 ([1, 2, 3] as const).map((pg) => (
                   <div key={pg} className="space-y-2">
@@ -843,7 +1063,7 @@ export default function App() {
                     <span className="inline-flex items-center gap-1.5 font-medium">
                       <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
                       <span>
-                        Page {selectedPage} sur 3 — Cliquez sur n’importe quelle ligne pointillée pour écrire directement dessus
+                        Page {selectedPage} / 3 — Cliquez sur n’importe quelle case pour écrire en arabe (Cairo)
                       </span>
                     </span>
                     <span className="font-cairo font-bold text-emerald-800">
