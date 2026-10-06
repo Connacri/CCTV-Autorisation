@@ -12,6 +12,7 @@ export interface DossierSubmissionEntity {
   id: number; // @Id() in ObjectBox
   createdAt: string; // @Index() DateTime
   updatedAt: string;
+  wilaya: string; // @Index()
   applicantName: string; // @Index()
   companyName: string;
   installationAddress: string;
@@ -41,10 +42,93 @@ export interface LazyQueryResult<T> {
   hasMore: boolean;
 }
 
-const DOSSIER_BOX_KEY = 'oran_objectbox_dossiers_v1';
-const CATALOG_BOX_KEY = 'oran_objectbox_catalog_v1';
+const DOSSIER_BOX_KEY = 'oran_objectbox_dossiers_v2';
+const CATALOG_BOX_KEY = 'oran_objectbox_catalog_v2';
+
+/**
+ * Complete official list of the 69 Wilayas of Algeria
+ * (58 Wilayas + 11 newly promoted Wilayas = 69 Wilayas)
+ */
+export const ALGERIA_69_WILAYAS: Array<{ code: string; valueAr: string; nameFr: string }> = [
+  { code: '31', valueAr: 'ولاية وهران', nameFr: '31 - Oran (Par défaut)' },
+  { code: '01', valueAr: 'ولاية أدرار', nameFr: '01 - Adrar' },
+  { code: '02', valueAr: 'ولاية الشلف', nameFr: '02 - Chlef' },
+  { code: '03', valueAr: 'ولاية الأغواط', nameFr: '03 - Laghouat' },
+  { code: '04', valueAr: 'ولاية أم البواقي', nameFr: '04 - Oum El Bouaghi' },
+  { code: '05', valueAr: 'ولاية باتنة', nameFr: '05 - Batna' },
+  { code: '06', valueAr: 'ولاية بجاية', nameFr: '06 - Béjaïa' },
+  { code: '07', valueAr: 'ولاية بسكرة', nameFr: '07 - Biskra' },
+  { code: '08', valueAr: 'ولاية بشار', nameFr: '08 - Béchar' },
+  { code: '09', valueAr: 'ولاية البليدة', nameFr: '09 - Blida' },
+  { code: '10', valueAr: 'ولاية البويرة', nameFr: '10 - Bouira' },
+  { code: '11', valueAr: 'ولاية تمنراست', nameFr: '11 - Tamanrasset' },
+  { code: '12', valueAr: 'ولاية تبسة', nameFr: '12 - Tébessa' },
+  { code: '13', valueAr: 'ولاية تلمسان', nameFr: '13 - Tlemcen' },
+  { code: '14', valueAr: 'ولاية تيارت', nameFr: '14 - Tiaret' },
+  { code: '15', valueAr: 'ولاية تيزي وزو', nameFr: '15 - Tizi Ouzou' },
+  { code: '16', valueAr: 'ولاية الجزائر', nameFr: '16 - Alger' },
+  { code: '17', valueAr: 'ولاية الجلفة', nameFr: '17 - Djelfa' },
+  { code: '18', valueAr: 'ولاية جيجل', nameFr: '18 - Jijel' },
+  { code: '19', valueAr: 'ولاية سطيف', nameFr: '19 - Sétif' },
+  { code: '20', valueAr: 'ولاية سعيدة', nameFr: '20 - Saïda' },
+  { code: '21', valueAr: 'ولاية سكيكدة', nameFr: '21 - Skikda' },
+  { code: '22', valueAr: 'ولاية سيدي بلعباس', nameFr: '22 - Sidi Bel Abbès' },
+  { code: '23', valueAr: 'ولاية عنابة', nameFr: '23 - Annaba' },
+  { code: '24', valueAr: 'ولاية قالمة', nameFr: '24 - Guelma' },
+  { code: '25', valueAr: 'ولاية قسنطينة', nameFr: '25 - Constantine' },
+  { code: '26', valueAr: 'ولاية المدية', nameFr: '26 - Médéa' },
+  { code: '27', valueAr: 'ولاية مستغانم', nameFr: '27 - Mostaganem' },
+  { code: '28', valueAr: 'ولاية المسيلة', nameFr: '28 - M’Sila' },
+  { code: '29', valueAr: 'ولاية معسكر', nameFr: '29 - Mascara' },
+  { code: '30', valueAr: 'ولاية ورقلة', nameFr: '30 - Ouargla' },
+  { code: '32', valueAr: 'ولاية البيض', nameFr: '32 - El Bayadh' },
+  { code: '33', valueAr: 'ولاية إيليزي', nameFr: '33 - Illizi' },
+  { code: '34', valueAr: 'ولاية برج بوعريريج', nameFr: '34 - Bordj Bou Arréridj' },
+  { code: '35', valueAr: 'ولاية بومرداس', nameFr: '35 - Boumerdès' },
+  { code: '36', valueAr: 'ولاية الطارف', nameFr: '36 - El Tarf' },
+  { code: '37', valueAr: 'ولاية تندوف', nameFr: '37 - Tindouf' },
+  { code: '38', valueAr: 'ولاية تسمسيلت', nameFr: '38 - Tissemsilt' },
+  { code: '39', valueAr: 'ولاية الوادي', nameFr: '39 - El Oued' },
+  { code: '40', valueAr: 'ولاية خنشلة', nameFr: '40 - Khenchela' },
+  { code: '41', valueAr: 'ولاية سوق أهراس', nameFr: '41 - Souk Ahras' },
+  { code: '42', valueAr: 'ولاية تيبازة', nameFr: '42 - Tipaza' },
+  { code: '43', valueAr: 'ولاية ميلة', nameFr: '43 - Mila' },
+  { code: '44', valueAr: 'ولاية عين الدفلى', nameFr: '44 - Aïn Defla' },
+  { code: '45', valueAr: 'ولاية النعامة', nameFr: '45 - Naâma' },
+  { code: '46', valueAr: 'ولاية عين تموشنت', nameFr: '46 - Aïn Témouchent' },
+  { code: '47', valueAr: 'ولاية غرداية', nameFr: '47 - Ghardaïa' },
+  { code: '48', valueAr: 'ولاية غليزان', nameFr: '48 - Relizane' },
+  { code: '49', valueAr: 'ولاية تيميمون', nameFr: '49 - Timimoun' },
+  { code: '50', valueAr: 'ولاية برج باجي مختار', nameFr: '50 - Bordj Badji Mokhtar' },
+  { code: '51', valueAr: 'ولاية أولاد جلال', nameFr: '51 - Ouled Djellal' },
+  { code: '52', valueAr: 'ولاية بني عباس', nameFr: '52 - Béni Abbès' },
+  { code: '53', valueAr: 'ولاية عين صالح', nameFr: '53 - In Salah' },
+  { code: '54', valueAr: 'ولاية عين قزام', nameFr: '54 - In Guezzam' },
+  { code: '55', valueAr: 'ولاية تقرت', nameFr: '55 - Touggourt' },
+  { code: '56', valueAr: 'ولاية جانت', nameFr: '56 - Djanet' },
+  { code: '57', valueAr: 'ولاية المغير', nameFr: '57 - El M’Ghair' },
+  { code: '58', valueAr: 'ولاية المنيعة', nameFr: '58 - El Meniaa' },
+  { code: '59', valueAr: 'ولاية آفلو', nameFr: '59 - Aflou' },
+  { code: '60', valueAr: 'ولاية بريكة', nameFr: '60 - Barika' },
+  { code: '61', valueAr: 'ولاية قصر الشلالة', nameFr: '61 - Ksar Chellala' },
+  { code: '62', valueAr: 'ولاية مسعد', nameFr: '62 - Messaad' },
+  { code: '63', valueAr: 'ولاية عين وسارة', nameFr: '63 - Aïn Oussera' },
+  { code: '64', valueAr: 'ولاية بوسعادة', nameFr: '64 - Boussaâda' },
+  { code: '65', valueAr: 'ولاية الأبيض سيدي الشيخ', nameFr: '65 - El Abiodh Sidi Cheikh' },
+  { code: '66', valueAr: 'ولاية القنطرة', nameFr: '66 - El Kantara' },
+  { code: '67', valueAr: 'ولاية بئر العاتر', nameFr: '67 - Bir El Ater' },
+  { code: '68', valueAr: 'ولاية قصر البخاري', nameFr: '68 - Ksar El Boukhari' },
+  { code: '69', valueAr: 'ولاية العريشة', nameFr: '69 - El Aricha' },
+];
 
 export const DEFAULT_CATALOG_ITEMS: Omit<ChoiceCatalogItemEntity, 'id' | 'createdAt'>[] = [
+  // 0. Les 69 Wilayas d'Algérie (الولاية في الصفحات 1 و 2 و 3)
+  ...ALGERIA_69_WILAYAS.map((w) => ({
+    categoryKey: 'wilaya' as CatalogCategoryKey,
+    valueAr: w.valueAr,
+    noteFr: `Wilaya ${w.nameFr}`,
+  })),
+
   // 1. Entreprises d'installation agréées (مرجع اعتماد و عنوان مؤسسة تركيب الكاميرات)
   {
     categoryKey: 'installer_company',
@@ -339,14 +423,11 @@ export const DEFAULT_CATALOG_ITEMS: Omit<ChoiceCatalogItemEntity, 'id' | 'create
   },
 ];
 
-/**
- * Generates initial realistic Oran dossiers so the ObjectBox Lazy List
- * has immediate multi-page records to inspect, search, and load.
- */
 function createInitialSeedDossiers(): DossierSubmissionEntity[] {
   const base = SAMPLE_ARABIC_VALUES;
 
   const seeds: Array<{
+    wilaya: string;
     applicant: string;
     father: string;
     mother: string;
@@ -362,6 +443,7 @@ function createInitialSeedDossiers(): DossierSubmissionEntity[] {
     createdAt: string;
   }> = [
     {
+      wilaya: 'ولاية وهران',
       applicant: 'بن أحمد محمد (مسير شركة الأمان للحراسة ش.ذ.م.م)',
       father: 'عبد القادر',
       mother: 'بوزيان فاطمة الزهراء',
@@ -377,6 +459,7 @@ function createInitialSeedDossiers(): DossierSubmissionEntity[] {
       createdAt: '2026-10-06T09:15:00.000Z',
     },
     {
+      wilaya: 'ولاية وهران',
       applicant: 'مرادفه عبد الكريم (مسير عيادة الشفاء الجراحية)',
       father: 'لحسن',
       mother: 'بلقاسم خديجة',
@@ -392,48 +475,51 @@ function createInitialSeedDossiers(): DossierSubmissionEntity[] {
       createdAt: '2026-10-04T14:30:00.000Z',
     },
     {
+      wilaya: 'ولاية الجزائر',
       applicant: 'بن عيسى سفيان (مسير مؤسسة أطلس للتوزيع)',
       father: 'مصطفى',
       mother: 'حمزاوي سعاد',
       company: 'أطلس للتوزيع والتبريد ش.ش.و.ذ.م.م',
-      address: 'المنطقة الصناعية السانيا قطعة رقم 14، بلدية السانيا، وهران',
-      installer: 'اعتماد رقم 89/2024 - مؤسسة الغرب للأنظمة الإلكترونية، حي العقيد لطفي، وهران',
+      address: 'المنطقة الصناعية الرويبة قطعة رقم 14، ولاية الجزائر',
+      installer: 'اعتماد رقم 89/2024 - مؤسسة الغرب للأنظمة الإلكترونية',
       indoorQty: '06',
       outdoorQty: '04',
       recQty: '02',
       totalQty: '12',
       date: '2026/09/28',
-      location: 'السانيا',
+      location: 'الجزائر',
       createdAt: '2026-09-28T11:20:00.000Z',
     },
     {
+      wilaya: 'ولاية تلمسان',
       applicant: 'زروقي كمال (تاجر مجوهرات ومعادن ثمينة)',
       father: 'أحمد',
       mother: 'طاهري مريم',
       company: 'مجوهرات الزروقي',
-      address: 'شارع العربي بن مهيدي رقم 52، بلدية وهران',
-      installer: 'اعتماد رقم 104/2023 - شركة أطلس بروتيكت ش.ذ.م.م، نهج جبهة التحرير الوطني، وهران',
+      address: 'شارع العربي بن مهيدي رقم 52، تلمسان',
+      installer: 'اعتماد رقم 104/2023 - شركة أطلس بروتيكت ش.ذ.م.م',
       indoorQty: '05',
       outdoorQty: '02',
       recQty: '01',
       totalQty: '08',
       date: '2026/09/19',
-      location: 'وهران',
-      createdAt: '2026-09-19T16:05:00.000Z',
+      location: 'تلمسان',
+      createdAt: '2026/09/19T16:05:00.000Z',
     },
     {
-      applicant: 'بلحاج ياسين (مسير شركة البحر الأبيض المتوسط للوجستيك)',
+      wilaya: 'ولاية قسنطينة',
+      applicant: 'بلحاج ياسين (مسير شركة الشرق للوجستيك)',
       father: 'محمد الصالح',
       mother: 'قرطبي جميلة',
-      company: 'البحر الأبيض المتوسط للوجستيك ش.ذ.أ',
-      address: 'المنطقة الصناعية أرزيو طريق الميناء، بلدية أرزيو، وهران',
-      installer: 'اعتماد رقم 62/2024 - مؤسسة ديجيتال فيزيون للحماية، أرزيو، ولاية وهران',
+      company: 'الشرق للوجستيك ش.ذ.أ',
+      address: 'المنطقة الصناعية الخروب، ولاية قسنطينة',
+      installer: 'اعتماد رقم 62/2024 - مؤسسة ديجيتال فيزيون للحماية',
       indoorQty: '10',
       outdoorQty: '06',
       recQty: '02',
       totalQty: '18',
       date: '2026/09/10',
-      location: 'أرزيو',
+      location: 'قسنطينة',
       createdAt: '2026-09-10T10:00:00.000Z',
     },
   ];
@@ -442,6 +528,7 @@ function createInitialSeedDossiers(): DossierSubmissionEntity[] {
     id: idx + 1,
     createdAt: s.createdAt,
     updatedAt: s.createdAt,
+    wilaya: s.wilaya,
     applicantName: s.applicant,
     companyName: s.company,
     installationAddress: s.address,
@@ -450,6 +537,9 @@ function createInitialSeedDossiers(): DossierSubmissionEntity[] {
     marketStrike: 'strike_external',
     values: {
       ...base,
+      p1_wilaya: s.wilaya,
+      p2_wilaya: s.wilaya,
+      p3_wilaya: s.wilaya,
       p1_applicant_name: s.applicant,
       p1_exploitation_address: s.address,
       p1_location: s.location,
@@ -532,16 +622,6 @@ class ObjectBoxDatabaseService {
     }));
   }
 
-  // ==========================================================================
-  // BOX 1: DossierSubmissionEntity Operations (with Lazy List Pagination)
-  // ==========================================================================
-
-  /**
-   * Simulates ObjectBox paginated query:
-   * final query = dossierBox.query(cond).order(Dossier_.createdAt, flags: Order.descending).build()
-   *   ..offset = offset
-   *   ..limit = limit;
-   */
   public queryDossiersLazy(params: {
     offset: number;
     limit: number;
@@ -556,6 +636,7 @@ class ObjectBoxDatabaseService {
     const filtered = q
       ? all.filter(
           (d) =>
+            (d.wilaya || '').toLowerCase().includes(q) ||
             d.applicantName.toLowerCase().includes(q) ||
             d.companyName.toLowerCase().includes(q) ||
             d.installationAddress.toLowerCase().includes(q) ||
@@ -582,6 +663,11 @@ class ObjectBoxDatabaseService {
     const list = this.loadDossiersFromStorage();
     const now = new Date().toISOString();
 
+    const wilaya =
+      params.values['p1_wilaya'] ||
+      params.values['p2_wilaya'] ||
+      params.values['p3_wilaya'] ||
+      'ولاية وهران';
     const applicantName =
       params.values['p1_applicant_name'] ||
       params.values['p2_identity'] ||
@@ -601,6 +687,7 @@ class ObjectBoxDatabaseService {
         const updated: DossierSubmissionEntity = {
           ...list[idx],
           updatedAt: now,
+          wilaya,
           applicantName,
           companyName,
           installationAddress,
@@ -620,6 +707,7 @@ class ObjectBoxDatabaseService {
       id: nextId,
       createdAt: now,
       updatedAt: now,
+      wilaya,
       applicantName,
       companyName,
       installationAddress,
@@ -641,10 +729,6 @@ class ObjectBoxDatabaseService {
   public getTotalDossierCount(): number {
     return this.loadDossiersFromStorage().length;
   }
-
-  // ==========================================================================
-  // BOX 2: ChoiceCatalogItemEntity CRUD Operations (14 Choice Lists)
-  // ==========================================================================
 
   public getAllCatalogItems(): ChoiceCatalogItemEntity[] {
     return this.loadCatalogFromStorage();

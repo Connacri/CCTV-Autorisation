@@ -1,6 +1,7 @@
 export type FieldAlignment = 'right' | 'center' | 'left';
 
 export type CatalogCategoryKey =
+  | 'wilaya'
   | 'installer_company'
   | 'indoor_cam_model'
   | 'outdoor_cam_model'
@@ -24,6 +25,13 @@ export interface CatalogCategoryMeta {
 }
 
 export const CATALOG_CATEGORIES: CatalogCategoryMeta[] = [
+  {
+    key: 'wilaya',
+    titleAr: 'الولاية (69 ولاية جزائرية مع إمكانية إضافة ولاية جديدة)',
+    titleFr: 'Wilaya d’Algérie (69 Wilayas + Ajout CRUD Pages 1, 2 et 3)',
+    descriptionFr:
+      'Liste officielle des 69 Wilayas d’Algérie (58 wilayas + 11 nouvelles wilayas) pour l’en-tête des 3 pages.',
+  },
   {
     key: 'installer_company',
     titleAr: 'مؤسسات تركيب الكاميرات المعتمدة (6)',
@@ -122,7 +130,7 @@ export interface PdfFieldConfig {
   /**
    * Normalized coordinates on the A4 page (0 to 100 percentage of page width/height)
    * xLeft: left boundary of the dotted line / cell (%)
-   * xRight: right boundary of the dotted line / cell (%) — where RTL Arabic text starts!
+   * xRight: right boundary of the dotted line / cell (%)
    * y: vertical baseline position from top (%)
    */
   xLeft: number;
@@ -137,6 +145,7 @@ export interface PdfFieldConfig {
    * Optional shared key for automatic cross-page synchronization
    */
   syncKey?:
+    | 'wilaya_header'
     | 'applicant_name'
     | 'birth_date'
     | 'birth_place'
@@ -148,12 +157,33 @@ export interface PdfFieldConfig {
    * Optional ObjectBox CRUD choice list category associated with this field
    */
   catalogCategory?: CatalogCategoryKey;
+  /**
+   * Whether to paint a white background mask behind the field to cover static printed text on uploaded PDFs
+   */
+  maskBackground?: boolean;
 }
 
 export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
   // ============================================================================
   // PAGE 1 : تعهد بعدم ربط نظام المراقبة عن طريق الفيديو بشبكة الانترنيت أنها ليست بالأشعة الحمراء
   // ============================================================================
+  {
+    id: 'p1_wilaya',
+    page: 1,
+    section: 'التعهد وهوية المصرح (Page 1)',
+    labelAr: 'الولاية (أعلى يمين الصفحة 1)',
+    labelFr: 'Wilaya d’en-tête (69 Wilayas disponibles ou ajout CRUD)',
+    placeholderAr: 'ولاية وهران',
+    xLeft: 76.0,
+    xRight: 95.2,
+    y: 8.1,
+    align: 'center',
+    fontSize: 13,
+    dir: 'rtl',
+    syncKey: 'wilaya_header',
+    catalogCategory: 'wilaya',
+    maskBackground: true,
+  },
   {
     id: 'p1_applicant_name',
     page: 1,
@@ -166,7 +196,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.0,
     xRight: 72.2,
     y: 40.3,
-    align: 'right',
+    align: 'center',
     fontSize: 12.5,
     dir: 'rtl',
     syncKey: 'applicant_name',
@@ -183,7 +213,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.0,
     xRight: 54.5,
     y: 45.4,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'installation_address',
@@ -224,6 +254,23 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
   // PAGE 2 : استمارة معلومات خاصة بطالب رخصة اقتناء تجهيزات حساسة
   // ============================================================================
   {
+    id: 'p2_wilaya',
+    page: 2,
+    section: 'الحالة المدنية لطالب الرخصة (Page 2)',
+    labelAr: 'الولاية (أعلى يمين الصفحة 2)',
+    labelFr: 'Wilaya d’en-tête (69 Wilayas disponibles ou ajout CRUD)',
+    placeholderAr: 'ولاية وهران',
+    xLeft: 76.0,
+    xRight: 95.2,
+    y: 8.3,
+    align: 'center',
+    fontSize: 13,
+    dir: 'rtl',
+    syncKey: 'wilaya_header',
+    catalogCategory: 'wilaya',
+    maskBackground: true,
+  },
+  {
     id: 'p2_identity',
     page: 2,
     section: 'الحالة المدنية لطالب الرخصة (Page 2)',
@@ -235,7 +282,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 6.5,
     xRight: 81.5,
     y: 37.8,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'applicant_name',
@@ -250,7 +297,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 51.8,
     xRight: 91.2,
     y: 41.2,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
   },
@@ -264,7 +311,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.5,
     xRight: 49.4,
     y: 41.2,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
   },
@@ -293,7 +340,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 6.0,
     xRight: 50.5,
     y: 44.5,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'birth_place',
@@ -310,7 +357,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 6.0,
     xRight: 86.2,
     y: 47.8,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
   },
@@ -381,7 +428,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.5,
     xRight: 52.5,
     y: 54.1,
-    align: 'right',
+    align: 'center',
     fontSize: 11.5,
     dir: 'rtl',
     catalogCategory: 'authority_issued_by',
@@ -424,7 +471,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.5,
     xRight: 89.2,
     y: 60.5,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'nationality',
@@ -454,7 +501,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.5,
     xRight: 51.5,
     y: 63.7,
-    align: 'right',
+    align: 'center',
     fontSize: 11.5,
     dir: 'rtl',
   },
@@ -510,7 +557,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 5.5,
     xRight: 80.0,
     y: 70.1,
-    align: 'right',
+    align: 'center',
     fontSize: 11.5,
     dir: 'rtl',
   },
@@ -550,6 +597,23 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
   // PAGE 3 : طلب رخصة اقتناء تجهيزات حساسة من السوق الوطنية / الخارجية
   // ============================================================================
   {
+    id: 'p3_wilaya',
+    page: 3,
+    section: 'معلومات صاحب الطلب والتركيب (Page 3)',
+    labelAr: 'الولاية (أعلى يمين الصفحة 3)',
+    labelFr: 'Wilaya d’en-tête (69 Wilayas disponibles ou ajout CRUD)',
+    placeholderAr: 'ولاية وهران',
+    xLeft: 76.0,
+    xRight: 95.2,
+    y: 6.1,
+    align: 'center',
+    fontSize: 13,
+    dir: 'rtl',
+    syncKey: 'wilaya_header',
+    catalogCategory: 'wilaya',
+    maskBackground: true,
+  },
+  {
     id: 'p3_ref_number',
     page: 3,
     section: 'معلومات صاحب الطلب والتركيب (Page 3)',
@@ -575,7 +639,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 4.0,
     xRight: 81.5,
     y: 25.3,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'applicant_name',
@@ -605,7 +669,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.5,
     xRight: 47.0,
     y: 28.1,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'birth_place',
@@ -620,7 +684,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.5,
     xRight: 89.0,
     y: 31.0,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'nationality',
@@ -638,7 +702,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.5,
     xRight: 73.0,
     y: 33.9,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     syncKey: 'installation_address',
@@ -655,7 +719,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.5,
     xRight: 87.0,
     y: 36.8,
-    align: 'right',
+    align: 'center',
     fontSize: 12,
     dir: 'rtl',
     catalogCategory: 'profession',
@@ -672,7 +736,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.5,
     xRight: 80.0,
     y: 39.6,
-    align: 'right',
+    align: 'center',
     fontSize: 11.5,
     dir: 'rtl',
     catalogCategory: 'activity_type',
@@ -687,14 +751,13 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.5,
     xRight: 54.5,
     y: 42.5,
-    align: 'right',
+    align: 'center',
     fontSize: 11,
     dir: 'rtl',
     catalogCategory: 'installer_company',
   },
 
   // --- TABLEAU DES ÉQUIPEMENTS SENSIBLES (PAGE 3) ---
-  // Note: Vertical positions of quantities adjusted lower (58.4, 64.6, 69.0, 71.9) to sit dead-center in their cells
   {
     id: 'p3_indoor_cam_nature',
     page: 3,
@@ -828,7 +891,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: 'وهران',
     xLeft: 16.2,
     xRight: 25.8,
-    y: 73.4,
+    y: 74.9,
     align: 'center',
     fontSize: 11,
     dir: 'rtl',
@@ -844,7 +907,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     placeholderAr: '2026/10/06',
     xLeft: 3.6,
     xRight: 14.0,
-    y: 73.4,
+    y: 74.9,
     align: 'center',
     fontSize: 10.5,
     dir: 'ltr',
@@ -860,7 +923,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.0,
     xRight: 82.5,
     y: 78.3,
-    align: 'right',
+    align: 'center',
     fontSize: 11,
     dir: 'rtl',
     catalogCategory: 'origin_country',
@@ -875,7 +938,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.0,
     xRight: 82.5,
     y: 80.4,
-    align: 'right',
+    align: 'center',
     fontSize: 11,
     dir: 'rtl',
     catalogCategory: 'provenance_country',
@@ -890,7 +953,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.0,
     xRight: 81.5,
     y: 82.4,
-    align: 'right',
+    align: 'center',
     fontSize: 11,
     dir: 'rtl',
     catalogCategory: 'transport_method',
@@ -905,7 +968,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.0,
     xRight: 71.5,
     y: 84.4,
-    align: 'right',
+    align: 'center',
     fontSize: 11,
     dir: 'rtl',
   },
@@ -919,7 +982,7 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
     xLeft: 3.0,
     xRight: 77.0,
     y: 86.4,
-    align: 'right',
+    align: 'center',
     fontSize: 11,
     dir: 'rtl',
     catalogCategory: 'security_conditions',
@@ -928,12 +991,14 @@ export const INITIAL_PDF_FIELDS: PdfFieldConfig[] = [
 
 export const SAMPLE_ARABIC_VALUES: Record<string, string> = {
   // Page 1
+  p1_wilaya: 'ولاية وهران',
   p1_applicant_name: 'بن أحمد محمد (مسير شركة الأمان للحراسة ش.ذ.م.م)',
   p1_exploitation_address: 'نهج العقيد لطفي رقم 24، بلدية وهران، ولاية وهران',
   p1_location: 'وهران',
   p1_date: '2026/10/06',
 
   // Page 2
+  p2_wilaya: 'ولاية وهران',
   p2_identity: 'بن أحمد محمد (مسير شركة الأمان للحراسة ش.ذ.م.م)',
   p2_father_name: 'عبد القادر',
   p2_mother_name: 'بوزيان فاطمة الزهراء',
@@ -958,6 +1023,7 @@ export const SAMPLE_ARABIC_VALUES: Record<string, string> = {
   p2_date: '2026/10/06',
 
   // Page 3
+  p3_wilaya: 'ولاية وهران',
   p3_ref_number: '142',
   p3_identity: 'بن أحمد محمد (مسير شركة الأمان للحراسة ش.ذ.م.م)',
   p3_birth_date: '1984/05/14',
@@ -1001,16 +1067,16 @@ export const PDF_DEEP_ANALYSIS: PageDeepAnalysis[] = [
     titleAr: 'تعهد بعدم ربط نظام المراقبة عن طريق الفيديو بشبكة الانترنيت أنها ليست بالأشعة الحمراء (INFRAROUGE)',
     titleFr: 'Engagement sur l’honneur : Non-connexion à Internet & Absence d’Infrarouge (IR)',
     purposeFr:
-      'Ce premier feuillet constitue un engagement juridique obligatoire exigé par la DRAG de la Wilaya d’Oran. Le demandeur s’y engage formellement à ce que son réseau de vidéosurveillance fonctionne en circuit fermé strict (CCTV local sans accès IP/Cloud/Internet) et que les capteurs optiques soient dépourvus de vision nocturne par LEDs infrarouges (équipements classés sensibles).',
+      'Ce premier feuillet constitue un engagement juridique obligatoire exigé par la DRAG de la Wilaya (sélectionnable parmi les 69 Wilayas d’Algérie ou ajout CRUD). Le demandeur s’y engage formellement à ce que son réseau de vidéosurveillance fonctionne en circuit fermé strict (CCTV local sans accès IP/Cloud/Internet) et que les capteurs optiques soient dépourvus de vision nocturne par LEDs infrarouges.',
     legalNotesFr: [
+      'En-tête Wilaya dynamique : Le champ "ولاية ..." en haut à droite est synchronisé sur les 3 pages à partir de la liste ObjectBox des 69 Wilayas (ou d’une nouvelle Wilaya ajoutée).',
       'Validité temporaire : L’autorisation d’acquisition (رخصة اقتناء) délivrée suite à ce dossier est valable exactement 06 mois (صالحة لمدة 06 أشهر) afin de permettre au demandeur de finaliser son dossier en vue de l’autorisation d’exploitation (رخصة استغلال).',
-      'Renvoi (1) : Doit comporter le nom et prénom de la personne physique ou la dénomination sociale de la personne morale.',
-      'Renvoi (2) : Doit indiquer avec exactitude l’adresse physique où le système de vidéosurveillance sera installé et exploité.',
+      'Renvois (1) et (2) : Nom/Raison sociale du demandeur et adresse physique exacte d’exploitation.',
     ],
-    adminServiceAr: 'ولاية وهران — مديرية التنظيم و الشؤون العامة — مصلحة التنظيم العام — مكتب تنظيم الأسلحة و المواد المتفجرة — قسم شركات الحراسة و التجهيزات الحساسة',
-    fieldCount: 4,
+    adminServiceAr: 'الولاية (69 ولاية) — مديرية التنظيم و الشؤون العامة — مصلحة التنظيم العام — مكتب تنظيم الأسلحة و المواد المتفجرة — قسم شركات الحراسة و التجهيزات الحساسة',
+    fieldCount: 5,
     technicalObservations: [
-      'Orientation & Flux : Texte arabe RTL aligné à droite à partir de la fin du libellé imprimé (xRight = 72.2% pour la ligne 1, xRight = 54.5% pour la ligne 2).',
+      'Centrage automatique : Chaque texte saisi est centré horizontalement au milieu de sa ligne pointillée entre xLeft et xRight.',
       'Zone de signature : Placée à gauche (حرر بـ ... في ...) suivie de la mention (امضاء و ختم المعني) nécessitant le cachet humide et la signature manuscrite après impression.',
     ],
   },
@@ -1019,16 +1085,16 @@ export const PDF_DEEP_ANALYSIS: PageDeepAnalysis[] = [
     titleAr: 'استمارة معلومات خاصة بطالب رخصة اقتناء تجهيزات حساسة',
     titleFr: 'Fiche de renseignements détaillée relative au demandeur d’autorisation d’acquisition',
     purposeFr:
-      'Cette fiche d’enquête administrative recueille l’état civil complet du demandeur (filiation paternelle et maternelle, date et lieu de naissance), ses titres d’identité (CNI et/ou Passeport avec dates de validité), ainsi que les informations corporatives de la société représentée (raison sociale, siège, coordonnées téléphoniques/fax/email et répartition des associés/actionnaires).',
+      'Cette fiche d’enquête administrative recueille la Wilaya d’en-tête, l’état civil complet du demandeur (filiation paternelle et maternelle, date et lieu de naissance), ses titres d’identité (CNI et/ou Passeport avec dates de validité), ainsi que les informations corporatives de la société représentée.',
     legalNotesFr: [
       'Déclaration sur l’honneur : Le soussigné atteste sur son honneur de l’exactitude des renseignements fournis (يتعهد الممضي أسفله بشرفه أن المعلومات المذكورة في الاستمارة صحيحة).',
       'Double identification : Prévoit à la fois la Carte Nationale d’Identité (بطاقة تعريف الوطنية) sur 3 segments et le Passeport (جواز سفر) sur 4 segments répartis sur deux lignes.',
       'Actionnariat : La ligne "اسم ولقب المساهمين" requiert la liste nominative des associés ou actionnaires de l’entreprise.',
     ],
-    adminServiceAr: 'ولاية وهران — مديرية التنظيم و الشؤون العامة — مصلحة التنظيم العام — مكتب تنظيم الأسلحة و المواد المتفجرة',
-    fieldCount: 22,
+    adminServiceAr: 'الولاية (69 ولاية) — مديرية التنظيم و الشؤون العامة — مصلحة التنظيم العام — مكتب تنظيم الأسلحة و المواد المتفجرة',
+    fieldCount: 23,
     technicalObservations: [
-      'Lignes multi-segments : Les lignes 2, 3, 5, 6, 7, 9, 10 et 12 comportent entre 2 et 3 sous-champs séparés par des mots-clés imprimés ("و", "بـ", "الصادرة عن", "بتاريخ", "الكائنة بـ", "الفاكس", "البريد الالكتروني").',
+      'Lignes multi-segments centrées : Les 23 champs de la Page 2 sont centrés individuellement au milieu de chaque segment pointillé.',
       'Espacement vertical régulier : Pas vertical constant d’environ 3.2% de la hauteur A4 (~27 points PDF) entre chaque ligne pointillée de la fiche.',
     ],
   },
@@ -1037,17 +1103,17 @@ export const PDF_DEEP_ANALYSIS: PageDeepAnalysis[] = [
     titleAr: 'طلب رخصة اقتناء تجهيزات حساسة من السوق الوطنية / الخارجية',
     titleFr: 'Demande d’autorisation d’acquisition et de détention d’équipements sensibles (Tableau Technique & Logistique)',
     purposeFr:
-      'Document central spécifiant l’origine du marché (National ou Extérieur), l’identité du demandeur, l’adresse d’installation, l’entreprise d’installation agréée, l’inventaire technique exact du matériel (Section ج, Sous-section 01 : Caméras intérieures, Caméras extérieures, Enregistreur DVR/NVR avec marques, modèles, numéros de série et quantités) ainsi que les 5 clauses logistiques et sécuritaires.',
+      'Document central spécifiant la Wilaya, l’origine du marché (National ou Extérieur), l’identité du demandeur, l’adresse d’installation, l’entreprise d’installation agréée, l’inventaire technique exact du matériel (Section ج, Sous-section 01 : Caméras intérieures, Caméras extérieures, Enregistreur DVR/NVR avec marques, modèles, numéros de série et quantités) ainsi que les 5 clauses logistiques et sécuritaires.',
     legalNotesFr: [
-      'Renvoi (1) : Rayer la mention inutile entre "- الوطنية" (Marché National) et "- الخارجية" (Marché Extérieur). Sur le modèle original, "- الخارجية" comporte déjà une marque de biffure.',
+      'Renvoi (1) : Rayer la mention inutile entre "- الوطنية" (Marché National) et "- الخارجية" (Marché Extérieur).',
       'Classification réglementaire pré-imprimée : Le matériel de vidéosurveillance relève de la Section "ج" (القسم ج) et de la Sous-section "01" (القسم الفرعي 01).',
       'Renvois (5) et (6) : La nature des activités et la référence d’agrément de l’installateur sont obligatoires lorsque l’installation est confiée à un opérateur agréé.',
     ],
-    adminServiceAr: 'رقم / م ت ش ع / م ت ع / م ت ا م م / 2020 — قسم شركات الحراسة و التجهيزات الحساسة',
-    fieldCount: 23,
+    adminServiceAr: 'الولاية (69 ولاية) — رقم / م ت ش ع / م ت ع / م ت ا م م / 2020 — قسم شركات الحراسة و التجهيزات الحساسة',
+    fieldCount: 24,
     technicalObservations: [
-      'Tableau à 5 colonnes (RTL) : Colonne 1 (تعيين التجهيزات : 76.2%–96.2%), Colonne 2 (طبيعة التجهيزات والرقم التسلسلي : 47.7%–76.2%), Colonne 3 (القسم ج : 35.7%–47.7%), Colonne 4 (القسم الفرعي 01 : 21.4%–35.7%), Colonne 5 (الكمية والمجموع : 3.2%–21.4%).',
-      'Alignement vertical des quantités calibré : Les 4 cellules de quantité (58.4%, 64.6%, 69.0%, 71.9%) sont centrées au cœur de chaque ligne du tableau.',
+      'Tableau à 5 colonnes (RTL) : Textes et quantités centrés au cœur de chaque cellule.',
+      'Ligne حرر بـ / في sous tableau : Calibrée à y = 74.9% avec espacement net sous la bordure inférieure du tableau (73.0%).',
     ],
   },
 ];

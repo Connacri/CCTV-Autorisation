@@ -7,6 +7,7 @@ export interface Translations {
   navCatalogCrud: string;
   navAnalysis: string;
   navFlutterCode: string;
+  navPrivacyPolicy: string;
   uploadOriginalPdf: string;
   changeOriginalPdf: string;
   downloadFilledPdf: string;
@@ -54,12 +55,13 @@ export interface Translations {
 
 export const TRANSLATIONS: Record<AppLocale, Translations> = {
   fr: {
-    brandTitle: 'DRAG Oran · ObjectBox & Cairo PDF',
+    brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
     navWorkspace: 'Formulaire & PDF',
     navHistory: 'Historique ObjectBox',
-    navCatalogCrud: 'Listes CRUD (14)',
+    navCatalogCrud: 'Listes CRUD (15)',
     navAnalysis: 'Analyse (3 Pages)',
-    navFlutterCode: 'Code Flutter & ObjectBox',
+    navFlutterCode: 'Code Flutter & CI',
+    navPrivacyPolicy: 'Confidentialité',
     uploadOriginalPdf: 'Charger PDF original (.pdf)',
     changeOriginalPdf: 'Changer le PDF',
     downloadFilledPdf: 'Télécharger PDF (Cairo)',
@@ -108,12 +110,13 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     btnResetCatalog: 'Restaurer les valeurs par défaut',
   },
   en: {
-    brandTitle: 'DRAG Oran · ObjectBox & Cairo PDF',
+    brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
     navWorkspace: 'Form & PDF',
     navHistory: 'ObjectBox History',
-    navCatalogCrud: 'CRUD Lists (14)',
+    navCatalogCrud: 'CRUD Lists (15)',
     navAnalysis: '3-Page Analysis',
-    navFlutterCode: 'Flutter & ObjectBox Code',
+    navFlutterCode: 'Flutter & CI Code',
+    navPrivacyPolicy: 'Privacy Policy',
     uploadOriginalPdf: 'Load Original PDF (.pdf)',
     changeOriginalPdf: 'Change PDF',
     downloadFilledPdf: 'Download PDF (Cairo)',

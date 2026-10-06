@@ -4,9 +4,9 @@ import { RenderOverlayOptions } from './pdfTemplateRenderer';
 
 export function generateFlutterPubspec(): string {
   return `name: oran_drag_pdf_objectbox
-description: Application Flutter (Web, Android, iOS, Desktop) avec ObjectBox (Historique Lazy List + 14 Listes CRUD) et remplissage PDF Arabe en police Cairo.
+description: Application Flutter (Web, Android, iOS, Desktop) avec ObjectBox (Historique Lazy List + 15 Listes CRUD dont 69 Wilayas) et remplissage PDF Arabe en police Cairo.
 publish_to: 'none'
-version: 1.1.0+1
+version: 1.2.0+1
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -42,6 +42,144 @@ flutter:
 `;
 }
 
+export function generateGithubActionsWorkflow(): string {
+  return `name: CI/CD — Build, Sign, Deploy Pages & Publish Versioned Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-web:
+    name: Build & Validate Web (React + Cairo PDF + ObjectBox)
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: \${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm install
+      - run: npm run lint
+      - run: npm run build
+      - name: Package web-build.zip
+        run: |
+          cd dist && zip -r ../web-build.zip . && cd ..
+      - name: Compute semantic version tag
+        id: version
+        run: |
+          if [[ "\${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="\${GITHUB_REF#refs/tags/}"
+          else
+            COUNT=\$(git rev-list --count HEAD 2>/dev/null || echo "1")
+            TAG="v1.0.\${COUNT}"
+          fi
+          echo "tag=\${TAG}" >> "\$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-release-bundle
+          path: web-build.zip
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+  deploy-pages:
+    needs: build-web
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  build-android:
+    name: Build & Sign Android Release (APK & AAB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+      - name: Reconstruct temporary Android Keystore from GitHub Secrets
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: \${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: \${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: \${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: \${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p android/app
+          echo "\${KEYSTORE_BASE64}" | base64 --decode > android/app/release-keystore.jks
+          cat <<EOF > android/key.properties
+          storePassword=\${KEYSTORE_PASSWORD}
+          keyPassword=\${KEY_PASSWORD}
+          keyAlias=\${KEY_ALIAS}
+          storeFile=release-keystore.jks
+          EOF
+      - name: Build Signed APK & AAB
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+          cp build/app/outputs/flutter-apk/app-release.apk ./app-release.apk
+          cp build/app/outputs/bundle/release/app-release.aab ./app-release.aab
+      - name: Remove temporary sensitive keystore files
+        if: always()
+        run: rm -f android/app/release-keystore.jks android/key.properties
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release-bundles
+          path: |
+            app-release.apk
+            app-release.aab
+
+  publish-release:
+    needs: [build-web, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: \${{ needs.build-web.outputs.release_tag }}
+          name: "Release \${{ needs.build-web.outputs.release_tag }}"
+          generate_release_notes: true
+          files: |
+            release-assets/web-build.zip
+            release-assets/app-release.apk
+            release-assets/app-release.aab
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+`;
+}
+
 export function generateFlutterObjectBoxEntities(
   catalogItems: ChoiceCatalogItemEntity[]
 ): string {
@@ -68,6 +206,9 @@ class DossierSubmissionEntity {
   int id = 0;
 
   @Index()
+  String wilaya;
+
+  @Index()
   String applicantName;
 
   String companyName;
@@ -76,7 +217,7 @@ class DossierSubmissionEntity {
   String totalQty;
   bool strikeExternalMarket;
 
-  /// JSON contenant les 49 valeurs des champs du PDF
+  /// JSON contenant les 52 valeurs des champs du PDF
   String fieldsJson;
 
   @Property(type: PropertyType.date)
@@ -85,6 +226,7 @@ class DossierSubmissionEntity {
 
   DossierSubmissionEntity({
     this.id = 0,
+    this.wilaya = 'ولاية وهران',
     required this.applicantName,
     required this.companyName,
     required this.installationAddress,
@@ -101,7 +243,7 @@ class DossierSubmissionEntity {
   }
 }
 
-/// Entité ObjectBox 2 : Élément de liste de choix CRUD (Entreprises, Caméras, DVR, Communes...)
+/// Entité ObjectBox 2 : Élément de liste de choix CRUD (69 Wilayas, Entreprises, Caméras, DVR, Communes...)
 @Entity()
 class ChoiceCatalogItemEntity {
   @Id()
@@ -121,7 +263,7 @@ class ChoiceCatalogItemEntity {
   });
 }
 
-/// Service ObjectBox gérant la pagination Lazy List de l'historique et le CRUD des 14 listes de choix
+/// Service ObjectBox gérant la pagination Lazy List de l'historique et le CRUD des 15 listes de choix
 class ObjectBoxService {
   late final Store store;
   late final Box<DossierSubmissionEntity> dossierBox;
@@ -149,6 +291,7 @@ class ObjectBoxService {
     final Condition<DossierSubmissionEntity>? condition = q.isEmpty
         ? null
         : DossierSubmissionEntity_.applicantName.contains(q, caseSensitive: false)
+            .or(DossierSubmissionEntity_.wilaya.contains(q, caseSensitive: false))
             .or(DossierSubmissionEntity_.companyName.contains(q, caseSensitive: false))
             .or(DossierSubmissionEntity_.installationAddress.contains(q, caseSensitive: false))
             .or(DossierSubmissionEntity_.installerCompany.contains(q, caseSensitive: false));
@@ -171,6 +314,7 @@ class ObjectBoxService {
     final query = dossierBox
         .query(
           DossierSubmissionEntity_.applicantName.contains(q, caseSensitive: false)
+              .or(DossierSubmissionEntity_.wilaya.contains(q, caseSensitive: false))
               .or(DossierSubmissionEntity_.companyName.contains(q, caseSensitive: false)),
         )
         .build();
@@ -186,7 +330,7 @@ class ObjectBoxService {
 
   bool deleteDossier(int id) => dossierBox.remove(id);
 
-  /// CRUD Listes de choix par catégorie
+  /// CRUD Listes de choix par catégorie (69 Wilayas, Installateurs, Caméras, DVR...)
   List<ChoiceCatalogItemEntity> getChoicesByCategory(String categoryKey) {
     final query = catalogBox
         .query(ChoiceCatalogItemEntity_.categoryKey.equals(categoryKey))
@@ -236,6 +380,7 @@ export function generateFlutterMainDart(
     align: '${f.align}',
     isRtl: ${f.dir === 'rtl'},
     multiline: ${Boolean(f.multiline)},
+    maskBackground: ${Boolean(f.maskBackground)},
     syncKey: ${f.syncKey ? `'${f.syncKey}'` : 'null'},
     catalogCategory: ${f.catalogCategory ? `'${f.catalogCategory}'` : 'null'},
     initialValue: '${val}',
@@ -267,7 +412,7 @@ class OranDragPdfFillerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DRAG Oran — ObjectBox & Cairo PDF',
+      title: 'DRAG Wilaya — ObjectBox & Cairo PDF',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -296,6 +441,7 @@ class PdfFieldCoord {
   final String align;
   final bool isRtl;
   final bool multiline;
+  final bool maskBackground;
   final String? syncKey;
   final String? catalogCategory;
   final String initialValue;
@@ -313,13 +459,14 @@ class PdfFieldCoord {
     required this.align,
     required this.isRtl,
     this.multiline = false,
+    this.maskBackground = false,
     this.syncKey,
     this.catalogCategory,
     this.initialValue = '',
   });
 }
 
-/// Les 49 champs cartographiés sur les 3 pages (avec les quantités du tableau parfaitement centrées)
+/// Les 52 champs cartographiés sur les 3 pages (Tous centrés, 69 Wilayas dynamiques, quantités centrées)
 const List<PdfFieldCoord> kOranPdfFields = [
 ${fieldsDartArray}
 ];
@@ -406,6 +553,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
 
     final entity = DossierSubmissionEntity(
       id: _activeDossierId ?? 0,
+      wilaya: currentMap['p1_wilaya'] ?? 'ولاية وهران',
       applicantName: currentMap['p1_applicant_name'] ?? 'بدون اسم',
       companyName: currentMap['p2_company_name'] ?? '—',
       installationAddress: currentMap['p3_installation_address'] ?? '—',
@@ -423,7 +571,6 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
     );
   }
 
-  /// Ouvre le tiroir d'historique ObjectBox avec Lazy Loading (ScrollController + offset/limit)
   void _openLazyHistoryModal() {
     showModalBottomSheet(
       context: context,
@@ -445,7 +592,6 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
     );
   }
 
-  /// Ouvre le gestionnaire CRUD ObjectBox pour une liste de choix (ex: entreprise qui installe)
   void _openCrudCatalogModal(PdfFieldCoord field) {
     if (field.catalogCategory == null) return;
     showDialog(
@@ -462,7 +608,13 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
     ).then((_) => setState(() {}));
   }
 
-  /// Génère le PDF rempli en police Cairo sans modifier le PDF original
+  void _openPrivacyPolicyScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+    );
+  }
+
+  /// Génère le PDF rempli en police Cairo (centré dans chaque champ)
   Future<Uint8List> _buildFilledPdfBytes() async {
     if (_originalPdfBytes == null) {
       throw Exception('Veuillez charger le fichier PDF original.');
@@ -475,6 +627,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
       cairoFont = PdfStandardFont(PdfFontFamily.helvetica, 12);
     }
     final PdfBrush inkBrush = PdfSolidBrush(PdfColor(15, 23, 42));
+    final PdfBrush whiteMaskBrush = PdfSolidBrush(PdfColor(255, 255, 255));
 
     if (_strikeExternalMarket && document.pages.count >= 3) {
       final PdfPage page3 = document.pages[2];
@@ -498,15 +651,17 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
       final double boxHeight = field.multiline ? 42.0 : 22.0;
       final double yTop = ((field.yPct / 100.0) * pageSize.height) - (field.fontSize * 1.15);
 
+      // Si maskBackground est actif (ex: remplacement de "ولاية وهران" par une des 69 Wilayas)
+      if (field.maskBackground) {
+        page.graphics.drawRectangle(
+          brush: whiteMaskBrush,
+          bounds: Rect.fromLTWH(xLeft, yTop, boxWidth, boxHeight),
+        );
+      }
+
       final PdfFont fieldFont = _cairoFontBytes != null
           ? PdfTrueTypeFont(_cairoFontBytes!, field.fontSize, style: PdfFontStyle.bold)
           : cairoFont;
-
-      final PdfTextAlignment alignment = field.align == 'right'
-          ? PdfTextAlignment.right
-          : field.align == 'center'
-              ? PdfTextAlignment.center
-              : PdfTextAlignment.left;
 
       page.graphics.drawString(
         text,
@@ -517,8 +672,8 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
           textDirection: field.isRtl
               ? PdfTextDirection.rightToLeft
               : PdfTextDirection.leftToRight,
-          alignment: alignment,
-          lineAlignment: PdfVerticalAlignment.top,
+          alignment: PdfTextAlignment.center,
+          lineAlignment: PdfVerticalAlignment.middle,
         ),
       );
     }
@@ -535,9 +690,9 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
           padding: const EdgeInsets.all(12.0),
           child: SegmentedButton<int>(
             segments: const [
-              ButtonSegment(value: 1, label: Text('صفحة 1: التعهد')),
-              ButtonSegment(value: 2, label: Text('صفحة 2: الاستمارة')),
-              ButtonSegment(value: 3, label: Text('صفحة 3: التجهيزات')),
+              ButtonSegment(value: 1, label: Text('صفحة 1: التعهد (5)')),
+              ButtonSegment(value: 2, label: Text('صفحة 2: الاستمارة (23)')),
+              ButtonSegment(value: 3, label: Text('صفحة 3: التجهيزات (24)')),
             ],
             selected: {_selectedPage},
             onSelectionChanged: (s) => setState(() => _selectedPage = s.first),
@@ -568,7 +723,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
                               isExpanded: true,
                               decoration: const InputDecoration(
                                 isDense: true,
-                                labelText: 'اختيار سريع من قائمة ObjectBox',
+                                labelText: 'اختيار من قائمة ObjectBox (أو إضافة جديد)',
                                 border: OutlineInputBorder(),
                               ),
                               items: choices
@@ -576,7 +731,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
                                     (c) => DropdownMenuItem<String>(
                                       value: c.valueAr,
                                       child: Text(
-                                        c.valueAr,
+                                        '\${c.valueAr} (\${c.noteFr})',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: GoogleFonts.cairo(fontSize: 13),
@@ -594,7 +749,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
                           ),
                           const SizedBox(width: 8),
                           IconButton.filledTonal(
-                            tooltip: 'إدارة القائمة (إضافة / تعديل / حذف CRUD)',
+                            tooltip: 'إضافة / تعديل / حذف (CRUD ObjectBox)',
                             onPressed: () => _openCrudCatalogModal(field),
                             icon: const Icon(Icons.edit_note),
                           ),
@@ -604,6 +759,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
                   TextField(
                     controller: _controllers[field.id],
                     textDirection: field.isRtl ? TextDirection.rtl : TextDirection.ltr,
+                    textAlign: TextAlign.center,
                     maxLines: field.multiline ? 2 : 1,
                     style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
@@ -636,7 +792,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
       build: (_) => _buildFilledPdfBytes(),
       canChangeOrientation: false,
       canChangePageFormat: false,
-      pdfFileName: 'Dossier_Equipements_Sensibles_Oran_Cairo.pdf',
+      pdfFileName: 'Dossier_Equipements_Sensibles_Cairo.pdf',
     );
   }
 
@@ -654,19 +810,24 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
             child: Scaffold(
               appBar: AppBar(
                 title: Text(
-                  'ولاية وهران — استمارة التجهيزات الحساسة (ObjectBox & Cairo)',
-                  style: GoogleFonts.cairo(fontWeight: FontWeight.w700, fontSize: 17),
+                  'استمارة التجهيزات الحساسة (69 ولاية · ObjectBox · Cairo)',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 actions: [
+                  IconButton(
+                    tooltip: 'سياسة الخصوصية / Règles de confidentialité (Play Store)',
+                    onPressed: _openPrivacyPolicyScreen,
+                    icon: const Icon(Icons.privacy_tip_outlined),
+                  ),
                   TextButton.icon(
                     onPressed: _openLazyHistoryModal,
                     icon: const Icon(Icons.history),
-                    label: const Text('سجل ObjectBox (Lazy)'),
+                    label: const Text('سجل ObjectBox'),
                   ),
                   TextButton.icon(
                     onPressed: _saveCurrentDossierToObjectBox,
                     icon: const Icon(Icons.save_outlined),
-                    label: const Text('حفظ في ObjectBox'),
+                    label: const Text('حفظ'),
                   ),
                   const SizedBox(width: 6),
                   FilledButton.icon(
@@ -675,7 +836,7 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
                       final bytes = await _buildFilledPdfBytes();
                       await Printing.sharePdf(
                         bytes: bytes,
-                        filename: 'Dossier_Equipements_Sensibles_Oran_Cairo.pdf',
+                        filename: 'Dossier_Equipements_Sensibles_Cairo.pdf',
                       );
                     },
                     icon: const Icon(Icons.download),
@@ -709,6 +870,44 @@ class _PdfFormWorkspaceScreenState extends State<PdfFormWorkspaceScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Écran intégré des Règles de Confidentialité (Conforme Google Play Store)
+class PrivacyPolicyScreen extends StatelessWidget {
+  const PrivacyPolicyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Règles de confidentialité / سياسة الخصوصية'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Règles de Confidentialité (Privacy Policy) — DRAG Wilaya PDF & ObjectBox',
+            style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '1. Traitement 100 % local sur l’appareil (ObjectBox) :\\n'
+            'Toutes les données saisies dans le formulaire administratif de 3 pages (identité, CNI/passeport, société, choix parmi les 69 Wilayas, inventaire des caméras et DVR) sont enregistrées exclusivement en local sur votre appareil via la base de données embarquée ObjectBox. Aucune donnée n’est transmise à un serveur externe.',
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '2. Absence totale de partage avec des tiers :\\n'
+            'Nous ne collectons, ne vendons et ne partageons aucune donnée personnelle ou sensible avec des tiers, régies publicitaires ou courtiers de données.',
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '3. Contrôle utilisateur et suppression des données (CRUD) :\\n'
+            'Vous pouvez consulter, modifier ou supprimer définitivement chaque dossier ou liste de choix directement depuis l’application à tout moment, ou en désinstallant l’application.',
+          ),
+        ],
       ),
     );
   }
@@ -795,7 +994,7 @@ class _ObjectBoxLazyHistorySheetState extends State<_ObjectBoxLazyHistorySheet> 
             TextField(
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'بحث بالاسم أو الشركة أو عنوان التركيب...',
+                hintText: 'بحث بالولاية أو الاسم أو الشركة أو العنوان...',
                 border: OutlineInputBorder(),
               ),
               onChanged: (v) {
@@ -819,7 +1018,7 @@ class _ObjectBoxLazyHistorySheetState extends State<_ObjectBoxLazyHistorySheet> 
                   return Card(
                     child: ListTile(
                       title: Text(
-                        d.applicantName,
+                        '\${d.wilaya} — \${d.applicantName}',
                         style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
@@ -854,7 +1053,7 @@ class _ObjectBoxLazyHistorySheetState extends State<_ObjectBoxLazyHistorySheet> 
   }
 }
 
-/// Boîte de dialogue CRUD ObjectBox pour ajouter/modifier/supprimer les options d'une liste de choix
+/// Boîte de dialogue CRUD ObjectBox (69 Wilayas + 14 listes d'équipements/entreprises)
 class _CrudChoiceDialog extends StatefulWidget {
   final String categoryKey;
   final String titleAr;

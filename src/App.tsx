@@ -24,6 +24,7 @@ import { DeepAnalysisView } from './components/DeepAnalysisView';
 import { FlutterCodeView } from './components/FlutterCodeView';
 import { ObjectBoxHistoryView } from './components/ObjectBoxHistoryView';
 import { CrudCatalogView } from './components/CrudCatalogView';
+import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import {
   Download,
   Upload,
@@ -45,13 +46,26 @@ type ActiveTab =
   | 'history'
   | 'catalog_crud'
   | 'analysis'
-  | 'flutter_code';
+  | 'flutter_code'
+  | 'privacy';
 
 export default function App() {
   const [locale, setLocale] = useState<AppLocale>('fr');
   const t = TRANSLATIONS[locale];
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('workspace');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (
+        params.get('page') === 'privacy' ||
+        window.location.hash === '#privacy' ||
+        window.location.pathname.includes('privacy')
+      ) {
+        return 'privacy';
+      }
+    }
+    return 'workspace';
+  });
   const [mobileWorkspacePane, setMobileWorkspacePane] = useState<'form' | 'pdf'>('form');
   const [fields, setFields] = useState<PdfFieldConfig[]>(INITIAL_PDF_FIELDS);
   const [values, setValues] = useState<Record<string, string>>(SAMPLE_ARABIC_VALUES);
@@ -342,6 +356,16 @@ export default function App() {
           >
             {t.navFlutterCode}
           </button>
+          <button
+            onClick={() => setActiveTab('privacy')}
+            className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
+              activeTab === 'privacy'
+                ? 'border-emerald-700 text-slate-900 font-semibold'
+                : 'border-transparent hover:text-slate-900'
+            }`}
+          >
+            {t.navPrivacyPolicy}
+          </button>
         </nav>
 
         {/* Zone 3: Primary Actions */}
@@ -435,6 +459,16 @@ export default function App() {
         >
           {t.navFlutterCode}
         </button>
+        <button
+          onClick={() => setActiveTab('privacy')}
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'privacy'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+              : 'text-slate-600'
+          }`}
+        >
+          {t.navPrivacyPolicy}
+        </button>
       </div>
 
       {/* Status notification bar */}
@@ -487,6 +521,8 @@ export default function App() {
           options={overlayOptions}
           catalogItems={catalogItems}
         />
+      ) : activeTab === 'privacy' ? (
+        <PrivacyPolicyView />
       ) : (
         /* WORKSPACE VIEW: Responsive Split Form Editor + Live 1:1 PDF Canvas */
         <main className="flex-1 flex flex-col lg:grid lg:grid-cols-12 min-h-[calc(100vh-57px)]">
@@ -573,6 +609,40 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Quick 69-Wilaya Selector + Add New Wilaya CRUD */}
+              <div className="p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-emerald-950 whitespace-nowrap">
+                  الولاية (Pages 1, 2, 3) :
+                </span>
+                <div className="flex items-center gap-1.5 flex-1 min-w-[220px]">
+                  <select
+                    value={values['p1_wilaya'] || 'ولاية وهران'}
+                    onChange={(e) => handleUpdateValue('p1_wilaya', e.target.value)}
+                    className="flex-1 min-w-0 border border-emerald-300 bg-white text-slate-900 rounded-md px-2.5 py-1.5 font-cairo font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  >
+                    {catalogItems
+                      .filter((c) => c.categoryKey === 'wilaya')
+                      .map((w) => (
+                        <option key={w.id} value={w.valueAr}>
+                          {w.valueAr} — {w.noteFr}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFocusedCatalogCategory('wilaya');
+                      setActiveTab('catalog_crud');
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors whitespace-nowrap shrink-0"
+                    title="Ajouter une nouvelle Wilaya ou gérer les 69 Wilayas dans ObjectBox"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Wilaya ({catalogItems.filter((c) => c.categoryKey === 'wilaya').length})</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Page Selector Tabs (Page 1, Page 2, Page 3) */}
               <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/70 rounded-lg">
                 <button
@@ -583,7 +653,7 @@ export default function App() {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Page 1 · التعهد (4)
+                  Page 1 · التعهد (5)
                 </button>
                 <button
                   onClick={() => setSelectedPage(2)}
@@ -593,7 +663,7 @@ export default function App() {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Page 2 · الاستمارة (22)
+                  Page 2 · الاستمارة (23)
                 </button>
                 <button
                   onClick={() => setSelectedPage(3)}
@@ -603,7 +673,7 @@ export default function App() {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Page 3 · التجهيزات (23)
+                  Page 3 · التجهيزات (24)
                 </button>
               </div>
 
@@ -910,7 +980,7 @@ export default function App() {
                           onFocus={() => setActiveFieldId(field.id)}
                           onChange={(e) => handleUpdateValue(field.id, e.target.value)}
                           placeholder={field.placeholderAr}
-                          className="w-full px-3 py-1.5 text-sm font-cairo font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          className="w-full px-3 py-1.5 text-sm font-cairo font-semibold text-center text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
                         />
                       ) : (
                         <input
@@ -920,7 +990,7 @@ export default function App() {
                           onFocus={() => setActiveFieldId(field.id)}
                           onChange={(e) => handleUpdateValue(field.id, e.target.value)}
                           placeholder={field.placeholderAr}
-                          className="w-full px-3 py-1.5 text-sm font-cairo font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          className="w-full px-3 py-1.5 text-sm font-cairo font-semibold text-center text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
                         />
                       )}
 

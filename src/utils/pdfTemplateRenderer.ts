@@ -48,11 +48,8 @@ export function drawOfficialPageBackground(
       py(3.8)
     );
 
-    // Right Administrative Block
+    // Right Administrative Block (Wilaya is drawn dynamically via p1_wilaya field)
     ctx.textAlign = 'right';
-    ctx.font = `700 ${fs(13)}px "Amiri", "Cairo", serif`;
-    ctx.fillText('ولاية وهران', px(90.5), py(8.1));
-
     ctx.font = `400 ${fs(10.5)}px "Amiri", "Cairo", serif`;
     ctx.fillText('مديرية التنظيم و الشؤون العامة', px(95.2), py(10.7));
     ctx.fillText('مصلحة التنظيم العام', px(92.2), py(13.2));
@@ -149,11 +146,8 @@ export function drawOfficialPageBackground(
       py(4.3)
     );
 
-    // Right Administrative Block
+    // Right Administrative Block (Wilaya is drawn dynamically via p2_wilaya field)
     ctx.textAlign = 'right';
-    ctx.font = `700 ${fs(13)}px "Amiri", "Cairo", serif`;
-    ctx.fillText('ولاية وهران', px(90.5), py(8.3));
-
     ctx.font = `400 ${fs(10.5)}px "Amiri", "Cairo", serif`;
     ctx.fillText('مديرية التنظيم و الشؤون العامة', px(95.2), py(10.8));
     ctx.fillText('مصلحة التنظيم العام', px(92.2), py(13.3));
@@ -279,11 +273,8 @@ export function drawOfficialPageBackground(
     ctx.lineTo(px(85.6), py(3.7));
     ctx.stroke();
 
-    // Right Admin Header
+    // Right Admin Header (Wilaya is drawn dynamically via p3_wilaya field)
     ctx.textAlign = 'right';
-    ctx.font = `700 ${fs(13)}px "Amiri", "Cairo", serif`;
-    ctx.fillText('ولاية وهران', px(90.5), py(6.1));
-
     ctx.font = `700 ${fs(9.8)}px "Amiri", "Cairo", serif`;
     ctx.fillText('مديرية التنظيم و الشؤون العامة', px(95.2), py(7.9));
     ctx.fillText('مصلحة التنظيم العام', px(93.0), py(9.4));
@@ -444,13 +435,13 @@ export function drawOfficialPageBackground(
     ctx.font = `400 ${fs(11.5)}px "Amiri", "Cairo", serif`;
     ctx.fillText('المجموع', (cTotalSplit + c4) / 2, py(71.6));
 
-    // Signature & Date below table
+    // Signature & Date below table (placed cleanly below table bottom 73.0%)
     ctx.textAlign = 'right';
     ctx.font = `400 ${fs(10.5)}px "Amiri", "Cairo", serif`;
-    ctx.fillText('حرر ب: .................في....................', px(30.4), py(74.3));
+    ctx.fillText('حرر ب: .................في....................', px(30.4), py(75.3));
 
     ctx.textAlign = 'center';
-    ctx.fillText('(امضاء و ختم المعني)', px(16.2), py(76.8));
+    ctx.fillText('(امضاء و ختم المعني)', px(16.2), py(77.3));
 
     // 5 Bottom Logistics & Security Lines
     ctx.textAlign = 'right';
@@ -549,6 +540,14 @@ export function drawFilledFieldsOverlay(
     const scaledPt = field.fontSize * options.fontSizeScale;
     const fontPx = fs(scaledPt);
 
+    // Paint clean white mask over static printed text (e.g. "ولاية وهران" on uploaded PDFs)
+    if (field.maskBackground) {
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(xL, yBase - fontPx * 1.15, boxWidth, fontPx * 1.55);
+      ctx.restore();
+    }
+
     // Optional interactive highlight boxes during live preview / calibration
     if (options.showFieldBoxes) {
       const isSelected = options.activeFieldId === field.id;
@@ -613,12 +612,19 @@ export function drawFilledFieldsOverlay(
         if (currentLine) wrappedLines.push(currentLine);
       }
 
-      const lineHeight = fontPx * 1.28;
-      wrappedLines.slice(0, 3).forEach((line, idx) => {
-        ctx.fillText(line, anchorX, yBase + idx * lineHeight, boxWidth - fs(4));
+      const visibleLines = wrappedLines.slice(0, 3);
+      const lineHeight = fontPx * 1.25;
+      const cellHeightPx = py(field.height || 5.5);
+      const cellTopPx = yBase - fontPx * 0.95;
+      const cellCenterY = cellTopPx + cellHeightPx / 2;
+      const totalBlockH = (visibleLines.length - 1) * lineHeight;
+      const firstLineY = cellCenterY - totalBlockH / 2 + fontPx * 0.32;
+
+      visibleLines.forEach((line, idx) => {
+        ctx.fillText(line, anchorX, firstLineY + idx * lineHeight, boxWidth - fs(4));
       });
     } else {
-      // Single-line field with automatic width fitting if very long
+      // Single-line field centered in its dotted segment / box
       ctx.fillText(rawVal, anchorX, yBase, boxWidth - fs(2));
     }
 
