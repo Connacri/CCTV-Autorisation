@@ -1,0 +1,6 @@
+{
+  "name": "DRAG Oran — Remplisseur PDF & Analyseur Officiel (Cairo RTL)",
+  "description": "Analyse approfondie du formulaire officiel de la Wilaya d'Oran (Équipements Sensibles & Vidéosurveillance) avec remplissage direct sur PDF en arabe (police Cairo) et code complet Flutter & Web.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
