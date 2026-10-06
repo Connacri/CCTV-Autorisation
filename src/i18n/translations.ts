@@ -8,6 +8,7 @@ export interface Translations {
   navAnalysis: string;
   navFlutterCode: string;
   navPrivacyPolicy: string;
+  navDeleteAccount: string;
   uploadOriginalPdf: string;
   changeOriginalPdf: string;
   downloadFilledPdf: string;
@@ -62,6 +63,7 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     navAnalysis: 'Analyse (3 Pages)',
     navFlutterCode: 'Code Flutter & CI',
     navPrivacyPolicy: 'Confidentialité',
+    navDeleteAccount: 'Suppression Compte',
     uploadOriginalPdf: 'Charger PDF original (.pdf)',
     changeOriginalPdf: 'Changer le PDF',
     downloadFilledPdf: 'Télécharger PDF (Cairo)',
@@ -117,6 +119,7 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     navAnalysis: '3-Page Analysis',
     navFlutterCode: 'Flutter & CI Code',
     navPrivacyPolicy: 'Privacy Policy',
+    navDeleteAccount: 'Delete Account',
     uploadOriginalPdf: 'Load Original PDF (.pdf)',
     changeOriginalPdf: 'Change PDF',
     downloadFilledPdf: 'Download PDF (Cairo)',

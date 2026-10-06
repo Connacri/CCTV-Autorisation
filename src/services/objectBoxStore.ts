@@ -785,6 +785,16 @@ class ObjectBoxDatabaseService {
     this.saveCatalogToStorage(defaults);
     return defaults;
   }
+
+  /**
+   * Permanently and irreversibly deletes all user dossiers and custom catalog entries
+   * from the local ObjectBox store (Google Play Account & Data Deletion compliance).
+   */
+  public purgeAllUserDataAndAccount(): void {
+    this.saveDossiersToStorage([]);
+    const defaults = this.buildDefaultCatalogEntities();
+    this.saveCatalogToStorage(defaults);
+  }
 }
 
 export const objectBoxStore = new ObjectBoxDatabaseService();

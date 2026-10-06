@@ -174,8 +174,8 @@ export const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
               }}
               className={`group rounded-xs transition-colors ${
                 isSelected
-                  ? 'ring-2 ring-emerald-600 bg-emerald-50/75 z-20'
-                  : 'hover:bg-emerald-50/40 hover:ring-1 hover:ring-emerald-500/50 z-10'
+                  ? 'z-20'
+                  : 'hover:bg-slate-100/30 z-10'
               }`}
               title={`${field.labelAr} — ${field.labelFr}`}
             >

@@ -25,6 +25,7 @@ import { FlutterCodeView } from './components/FlutterCodeView';
 import { ObjectBoxHistoryView } from './components/ObjectBoxHistoryView';
 import { CrudCatalogView } from './components/CrudCatalogView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
+import { AccountDeletionView } from './components/AccountDeletionView';
 import {
   Download,
   Upload,
@@ -47,7 +48,8 @@ type ActiveTab =
   | 'catalog_crud'
   | 'analysis'
   | 'flutter_code'
-  | 'privacy';
+  | 'privacy'
+  | 'delete_account';
 
 export default function App() {
   const [locale, setLocale] = useState<AppLocale>('fr');
@@ -56,6 +58,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      if (
+        params.get('page') === 'delete-account' ||
+        params.get('page') === 'delete_account' ||
+        window.location.hash === '#delete-account' ||
+        window.location.pathname.includes('delete-account')
+      ) {
+        return 'delete_account';
+      }
       if (
         params.get('page') === 'privacy' ||
         window.location.hash === '#privacy' ||
@@ -71,7 +81,7 @@ export default function App() {
   const [values, setValues] = useState<Record<string, string>>(SAMPLE_ARABIC_VALUES);
   const [selectedPage, setSelectedPage] = useState<1 | 2 | 3>(1);
   const [viewAllPages, setViewAllPages] = useState<boolean>(false);
-  const [activeFieldId, setActiveFieldId] = useState<string | null>('p1_applicant_name');
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
 
   // ObjectBox state
   const [activeDossierId, setActiveDossierId] = useState<number | null>(1);
@@ -85,7 +95,7 @@ export default function App() {
   // Auto-sync shared fields across Pages 1, 2, 3
   const [autoSync, setAutoSync] = useState<boolean>(true);
   const [showCalibration, setShowCalibration] = useState<boolean>(false);
-  const [directEditOnPdf, setDirectEditOnPdf] = useState<boolean>(true);
+  const [directEditOnPdf, setDirectEditOnPdf] = useState<boolean>(false);
   const [zoom, setZoom] = useState<number>(0.92);
 
   // Uploaded original PDF state
@@ -106,8 +116,8 @@ export default function App() {
     globalOffsetY: 0,
     fontSizeScale: 1.0,
     marketStrike: 'strike_external',
-    showFieldBoxes: true,
-    activeFieldId: 'p1_applicant_name',
+    showFieldBoxes: false,
+    activeFieldId: null,
   });
 
   const refreshCatalogFromObjectBox = () => {
@@ -366,6 +376,16 @@ export default function App() {
           >
             {t.navPrivacyPolicy}
           </button>
+          <button
+            onClick={() => setActiveTab('delete_account')}
+            className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
+              activeTab === 'delete_account'
+                ? 'border-rose-700 text-rose-800 font-semibold'
+                : 'border-transparent text-rose-700 hover:text-rose-900'
+            }`}
+          >
+            {t.navDeleteAccount}
+          </button>
         </nav>
 
         {/* Zone 3: Primary Actions */}
@@ -469,6 +489,16 @@ export default function App() {
         >
           {t.navPrivacyPolicy}
         </button>
+        <button
+          onClick={() => setActiveTab('delete_account')}
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap ${
+            activeTab === 'delete_account'
+              ? 'bg-rose-50 text-rose-800 font-semibold'
+              : 'text-rose-700'
+          }`}
+        >
+          {t.navDeleteAccount}
+        </button>
       </div>
 
       {/* Status notification bar */}
@@ -523,6 +553,18 @@ export default function App() {
         />
       ) : activeTab === 'privacy' ? (
         <PrivacyPolicyView />
+      ) : activeTab === 'delete_account' ? (
+        <AccountDeletionView
+          onPurgeCompleted={() => {
+            setValues({});
+            setActiveDossierId(null);
+            setCatalogItems(objectBoxStore.getAllCatalogItems());
+            setHistoryRefreshCount((c) => c + 1);
+            setStatusBanner(
+              'Suppression définitive exécutée : Le compte utilisateur et tous les dossiers ObjectBox ont été effacés.'
+            );
+          }}
+        />
       ) : (
         /* WORKSPACE VIEW: Responsive Split Form Editor + Live 1:1 PDF Canvas */
         <main className="flex-1 flex flex-col lg:grid lg:grid-cols-12 min-h-[calc(100vh-57px)]">

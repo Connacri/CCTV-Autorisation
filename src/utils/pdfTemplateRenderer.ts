@@ -580,26 +580,24 @@ export function drawFilledFieldsOverlay(
     }
 
     // Optional interactive highlight boxes during live preview / calibration
-    if (options.showFieldBoxes) {
+    if (options.showFieldBoxes && field.id !== 'p1_applicant_name') {
       const isSelected = options.activeFieldId === field.id;
       const boxH = field.multiline ? py(field.height || 5.2) : fontPx * 1.45;
       const boxTop = field.multiline ? yBase - fontPx * 0.95 : yBase - fontPx * 1.05;
 
       ctx.save();
       ctx.fillStyle = isSelected
-        ? 'rgba(16, 185, 129, 0.16)'
+        ? 'rgba(37, 99, 235, 0.10)'
         : rawVal.trim()
         ? 'rgba(37, 99, 235, 0.06)'
         : 'rgba(245, 158, 11, 0.08)';
       ctx.strokeStyle = isSelected
-        ? 'rgba(5, 150, 105, 0.9)'
+        ? 'rgba(37, 99, 235, 0.65)'
         : rawVal.trim()
         ? 'rgba(37, 99, 235, 0.35)'
         : 'rgba(217, 119, 6, 0.45)';
-      ctx.lineWidth = isSelected ? 2 : 1;
-      if (!isSelected) {
-        ctx.setLineDash([3, 2]);
-      }
+      ctx.lineWidth = isSelected ? 1.5 : 1;
+      ctx.setLineDash([3, 2]);
       ctx.fillRect(xL, boxTop, boxWidth, boxH);
       ctx.strokeRect(xL, boxTop, boxWidth, boxH);
       ctx.restore();
