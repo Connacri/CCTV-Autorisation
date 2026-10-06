@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="oran_drag_pdf_objectbox"
+        android:label="CCTV Autorisation"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
