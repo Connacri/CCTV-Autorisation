@@ -5,6 +5,8 @@ import {
   ToolType,
   RoomElement,
   DoorElement,
+  GateElement,
+  StairElement,
   WindowElement,
   SecurityDeviceElement,
   TextAnnotationElement,
@@ -40,6 +42,21 @@ import {
   Undo2,
   Redo2,
   X,
+  ZoomIn,
+  ZoomOut,
+  Ruler,
+  HardDrive,
+  ShieldCheck,
+  AlertTriangle,
+  MonitorPlay,
+  Sun,
+  Moon,
+  Crosshair,
+  HelpCircle,
+  Info,
+  Monitor,
+  Radio,
+  Fence,
 } from 'lucide-react';
 import { AppLocale, TRANSLATIONS } from '../i18n/translations';
 
@@ -65,13 +82,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const isRtl = locale === 'ar';
 
   // Persistence key
-  const STORAGE_KEY = 'cctv_floor_plan_data_v1';
+  const STORAGE_KEY = 'cctv_floor_plan_data_v3';
 
   const [plan, setPlan] = useState<FloorPlanData>(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) return JSON.parse(saved);
+        const legacy2 = localStorage.getItem('cctv_floor_plan_data_v2');
+        if (legacy2) return JSON.parse(legacy2);
+        const legacy1 = localStorage.getItem('cctv_floor_plan_data_v1');
+        if (legacy1) return JSON.parse(legacy1);
       } catch (e) {
         console.error('Erreur chargement plan:', e);
       }
@@ -83,35 +104,80 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectedId, setSelectedId] = useState<string | null>('dev_cam1');
   const [selectedType, setSelectedType] = useState<
-    'room' | 'door' | 'window' | 'device' | 'annotation' | null
+    'room' | 'door' | 'gate' | 'stairs' | 'window' | 'device' | 'annotation' | null
   >('device');
 
-  // Drawing state for 2D canvas
+  // Canvas zoom & view options
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+  const [showFovCones, setShowFovCones] = useState<boolean>(true);
+  const [showDimensions, setShowDimensions] = useState<boolean>(true);
+  const [gridSnapOn, setGridSnapOn] = useState<boolean>(true);
+
+  // Beginner Helper / Onboarding State
+  const [showBeginnerGuide, setShowBeginnerGuide] = useState<boolean>(true);
+  const [activeStep, setActiveStep] = useState<1 | 2 | 3 | 4>(1);
+
+  // Measure Tool State
+  const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
+  const [measureCurrent, setMeasureCurrent] = useState<{ x: number; y: number } | null>(null);
+
+  // Live Camera POV Simulator Modal
+  const [simulatedCameraId, setSimulatedCameraId] = useState<string | null>(null);
+  const [simNightMode, setSimNightMode] = useState<boolean>(false);
+  const [simDigitalZoom, setSimDigitalZoom] = useState<number>(1);
+  const [simTimestamp, setSimTimestamp] = useState<string>('');
+
+  // Drawing state for 2D canvas (Room creation)
   const [isDrawingRoom, setIsDrawingRoom] = useState(false);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [currentDrawCoord, setCurrentDrawCoord] = useState<{ x: number; y: number } | null>(null);
 
-  // Dragging state for moving elements
+  // === LONG PRESS + SLIDE DRAG SYSTEM ===
+  const [pendingLongPress, setPendingLongPress] = useState<{
+    id: string;
+    type: 'room' | 'door' | 'gate' | 'stairs' | 'window' | 'device' | 'annotation';
+    clientX: number;
+    clientY: number;
+    itemX: number;
+    itemY: number;
+    meterX: number;
+    meterY: number;
+  } | null>(null);
+
   const [isDraggingElement, setIsDraggingElement] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-
-  // Undo & Redo History (Snapshots of plan, up to 30 states)
-  const [undoStack, setUndoStack] = useState<FloorPlanData[]>([]);
-  const [redoStack, setRedoStack] = useState<FloorPlanData[]>([]);
+  const longPressTimerRef = useRef<any>(null);
   const dragStartPlanRef = useRef<FloorPlanData | null>(null);
 
   // Hover state for Eraser tool
   const [hoveredEraseId, setHoveredEraseId] = useState<string | null>(null);
+
+  // Toast Notification
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  // Undo & Redo History (Snapshots of plan, up to 35 states)
+  const [undoStack, setUndoStack] = useState<FloorPlanData[]>([]);
+  const [redoStack, setRedoStack] = useState<FloorPlanData[]>([]);
+
+  // Real-time clock for simulated camera
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setSimTimestamp(now.toISOString().replace('T', ' ').substring(0, 19));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Save snapshot to undo stack before any modification
   const recordUndoSnapshot = (customSnapshot?: FloorPlanData) => {
     const snapshot = customSnapshot
       ? JSON.parse(JSON.stringify(customSnapshot))
       : JSON.parse(JSON.stringify(plan));
-    setUndoStack((prev) => [...prev.slice(-29), snapshot]);
+    setUndoStack((prev) => [...prev.slice(-34), snapshot]);
     setRedoStack([]);
   };
 
@@ -119,7 +185,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
     const newUndoStack = undoStack.slice(0, -1);
-    setRedoStack((r) => [...r.slice(-29), JSON.parse(JSON.stringify(plan))]);
+    setRedoStack((r) => [...r.slice(-34), JSON.parse(JSON.stringify(plan))]);
     setUndoStack(newUndoStack);
     setPlan(previous);
     setSelectedId(null);
@@ -132,7 +198,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
     const newRedoStack = redoStack.slice(0, -1);
-    setUndoStack((u) => [...u.slice(-29), JSON.parse(JSON.stringify(plan))]);
+    setUndoStack((u) => [...u.slice(-34), JSON.parse(JSON.stringify(plan))]);
     setRedoStack(newRedoStack);
     setPlan(next);
     setSelectedId(null);
@@ -143,13 +209,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const handleEraseElement = (
     id: string,
-    type: 'room' | 'door' | 'window' | 'device' | 'annotation'
+    type: 'room' | 'door' | 'gate' | 'stairs' | 'window' | 'device' | 'annotation'
   ) => {
     recordUndoSnapshot();
     setPlan((prev) => ({
       ...prev,
       rooms: prev.rooms.filter((r) => r.id !== id),
       doors: prev.doors.filter((d) => d.id !== id),
+      gates: (prev.gates || []).filter((g) => g.id !== id),
+      stairs: (prev.stairs || []).filter((s) => s.id !== id),
       windows: prev.windows.filter((w) => w.id !== id),
       devices: prev.devices.filter((dev) => dev.id !== id),
       annotations: prev.annotations.filter((a) => a.id !== id),
@@ -159,17 +227,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setSelectedType(null);
     }
     setHoveredEraseId(null);
-    const labelMap: Record<string, string> = {
-      room: isRtl ? 'تم مسح الغرفة' : 'Pièce effacée',
-      door: isRtl ? 'تم مسح الباب' : 'Porte effacée',
-      window: isRtl ? 'تم مسح النافذة' : 'Fenêtre effacée',
-      device: isRtl ? 'تم مسح الكاميرا / الجهاز' : 'Équipement effacé',
-      annotation: isRtl ? 'تم مسح النص' : 'Texte effacé',
-    };
-    showToast(labelMap[type] || (isRtl ? 'تم مسح العنصر' : 'Élément effacé avec la gomme'));
+    showToast(isRtl ? 'تم مسح العنصر' : 'Élément effacé du plan.');
   };
 
-  // Keyboard shortcut listener for Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, E (Eraser), S (Select), Delete
+  // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -200,11 +261,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         if (!isCmdOrCtrl) {
           e.preventDefault();
           setActiveTool('eraser');
-          showToast(
-            isRtl
-              ? 'أداة الممحاة مفعلة'
-              : 'Outil Gomme activé [E] : cliquez sur un élément pour l’effacer'
-          );
+          showToast(isRtl ? 'أداة الممحاة مفعلة' : 'Outil Gomme activé [E]');
         }
       } else if (e.key === 's' || e.key === 'S' || e.key === 'v' || e.key === 'V') {
         if (!isCmdOrCtrl) {
@@ -236,46 +293,84 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    setTimeout(() => setToastMessage(null), 3800);
   };
 
-  // Metrics & Stats for Dossier Sync
+  // Metrics & Stats
   const bulletCount = plan.devices.filter((d) => d.type === 'camera_bullet').length;
   const domeCount = plan.devices.filter((d) => d.type === 'camera_dome').length;
-  const totalCams = bulletCount + domeCount;
+  const ptzCount = plan.devices.filter((d) => d.type === 'camera_ptz').length;
+  const totalCams = bulletCount + domeCount + ptzCount;
   const indoorCams = plan.devices.filter(
     (d) => (d.type === 'camera_bullet' || d.type === 'camera_dome') && !d.isOutdoor
   ).length;
   const outdoorCams = plan.devices.filter(
-    (d) => (d.type === 'camera_bullet' || d.type === 'camera_dome') && d.isOutdoor
+    (d) =>
+      d.type === 'camera_ptz' ||
+      ((d.type === 'camera_bullet' || d.type === 'camera_dome') && d.isOutdoor)
   ).length;
   const dvrCount = plan.devices.filter((d) => d.type === 'dvr').length;
   const alarmCount = plan.devices.filter((d) => d.type === 'alarm_siren').length;
+  const monitorCount = plan.devices.filter((d) => d.type === 'monitor_screen').length;
+  const gateCount = (plan.gates || []).length;
+  const stairCount = (plan.stairs || []).length;
 
   // Selected item reference
   const selectedDevice = plan.devices.find((d) => d.id === selectedId);
   const selectedRoom = plan.rooms.find((r) => r.id === selectedId);
   const selectedDoor = plan.doors.find((d) => d.id === selectedId);
+  const selectedGate = (plan.gates || []).find((g) => g.id === selectedId);
+  const selectedStair = (plan.stairs || []).find((s) => s.id === selectedId);
   const selectedWindow = plan.windows.find((w) => w.id === selectedId);
   const selectedAnnotation = plan.annotations.find((a) => a.id === selectedId);
 
   // Scale: pixels per meter on 2D SVG canvas
-  const SCALE = 36; // 36 px = 1 meter
+  const BASE_SCALE = 36;
+  const SCALE = BASE_SCALE * zoomLevel;
   const canvasWidthPx = plan.widthMeters * SCALE;
   const canvasHeightPx = plan.heightMeters * SCALE;
 
-  // Long-Press Quick Creation Menu State
-  interface LongPressMenuState {
-    x: number;
-    y: number;
-    pixelX: number;
-    pixelY: number;
-  }
-  const [longPressMenu, setLongPressMenu] = useState<LongPressMenuState | null>(null);
-  const longPressTimerRef = useRef<any>(null);
-  const pressStartPosRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  // Blind Spot Analysis
+  const allAccessPoints = [
+    ...plan.doors.map((d) => ({ ...d, isGate: false })),
+    ...(plan.gates || []).map((g) => ({ ...g, isGate: true, isEmergencyExit: false })),
+  ];
 
-  // Coordinate conversion helper (supports Mouse and Touch)
+  const doorCoverageAnalysis = allAccessPoints.map((access) => {
+    const isCovered = plan.devices.some((dev) => {
+      if (dev.type !== 'camera_bullet' && dev.type !== 'camera_dome' && dev.type !== 'camera_ptz') {
+        return false;
+      }
+      const dist = Math.hypot(dev.x - access.x, dev.y - access.y);
+      if (dist > (dev.range || 12)) return false;
+      if (dev.type === 'camera_ptz') return true; // 360 degree coverage
+      const angleToAccess = (Math.atan2(access.y - dev.y, access.x - dev.x) * 180) / Math.PI;
+      const normAngle = (angleToAccess + 360) % 360;
+      const devRot = (dev.rotation + 360) % 360;
+      let angleDiff = Math.abs(normAngle - devRot);
+      if (angleDiff > 180) angleDiff = 360 - angleDiff;
+      const halfFov = (dev.fovAngle || 85) / 2;
+      return angleDiff <= halfFov + 15;
+    });
+    return { access, isCovered };
+  });
+
+  const uncoveredAccess = doorCoverageAnalysis.filter((a) => !a.isCovered);
+  const siteCoverageScore =
+    allAccessPoints.length > 0
+      ? Math.round(
+          ((allAccessPoints.length - uncoveredAccess.length) / allAccessPoints.length) * 100
+        )
+      : totalCams > 0
+      ? 100
+      : 0;
+
+  // Storage calculation for 30 days retention
+  const estimatedStorageGb = Math.round(totalCams * 24.5 * 30);
+  const recommendedHddTb =
+    estimatedStorageGb <= 1800 ? '2 To' : estimatedStorageGb <= 3800 ? '4 To' : '8 To';
+
+  // Coordinate conversion helper
   const getCanvasCoords = (e: React.MouseEvent<any> | React.TouchEvent<any> | MouseEvent | TouchEvent) => {
     if (!svgRef.current) return { x: 0, y: 0, rawX: 0, rawY: 0 };
     const rect = svgRef.current.getBoundingClientRect();
@@ -293,11 +388,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
     const pixelX = clientX - rect.left;
     const pixelY = clientY - rect.top;
-    // Snap to 0.25m grid for smooth sliding
+
     const rawMeterX = pixelX / SCALE;
     const rawMeterY = pixelY / SCALE;
-    const snapMeterX = Math.round(rawMeterX * 4) / 4;
-    const snapMeterY = Math.round(rawMeterY * 4) / 4;
+    const snap = gridSnapOn ? 0.25 : 0.05;
+    const snapMeterX = Math.round(rawMeterX / snap) * snap;
+    const snapMeterY = Math.round(rawMeterY / snap) * snap;
+
     return {
       x: Math.max(0, Math.min(plan.widthMeters, snapMeterX)),
       y: Math.max(0, Math.min(plan.heightMeters, snapMeterY)),
@@ -306,228 +403,69 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     };
   };
 
-  const startLongPressTimer = (
-    clientX: number,
-    clientY: number,
-    coords: { x: number; y: number; rawX: number; rawY: number }
+  // === LONG PRESS HANDLERS ===
+  const handleElementPressStart = (
+    e: React.MouseEvent | React.TouchEvent,
+    id: string,
+    type: 'room' | 'door' | 'gate' | 'stairs' | 'window' | 'device' | 'annotation',
+    itemX: number,
+    itemY: number
   ) => {
-    if (activeTool === 'eraser') return;
-    pressStartPosRef.current = { clientX, clientY };
-    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    e.stopPropagation();
+
+    if (activeTool === 'eraser') {
+      handleEraseElement(id, type);
+      return;
+    }
+
+    let clientX = 0;
+    let clientY = 0;
+    if ('touches' in e && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    const coords = getCanvasCoords(e as any);
+
+    setPendingLongPress({
+      id,
+      type,
+      clientX,
+      clientY,
+      itemX,
+      itemY,
+      meterX: coords.x,
+      meterY: coords.y,
+    });
+
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    // 280ms threshold for long-press moving
     longPressTimerRef.current = setTimeout(() => {
-      setLongPressMenu({
-        x: coords.x,
-        y: coords.y,
-        pixelX: coords.rawX,
-        pixelY: coords.rawY,
-      });
-      longPressTimerRef.current = null;
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         try {
           navigator.vibrate(45);
         } catch (_) {}
       }
-    }, 450);
-  };
-
-  const cancelLongPressTimer = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
+      dragStartPlanRef.current = JSON.parse(JSON.stringify(plan));
+      setIsDraggingElement(true);
+      setDraggingId(id);
+      setSelectedId(id);
+      setSelectedType(type);
+      setDragOffset({ x: coords.x - itemX, y: coords.y - itemY });
+      setPendingLongPress(null);
       longPressTimerRef.current = null;
-    }
-    pressStartPosRef.current = null;
-  };
-
-  // Centralized Device / Opening Creation Helper
-  const createDeviceOrElementAtCoords = (tool: ToolType, x: number, y: number) => {
-    if (tool === 'room' || tool === 'eraser' || tool === 'select') return;
-
-    if (tool === 'door') {
-      const newDoor: DoorElement = {
-        id: `door_${Date.now()}`,
-        x,
-        y,
-        width: 1.0,
-        angle: 0,
-        isEmergencyExit: false,
-        label: 'Porte d’accès',
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, doors: [...prev.doors, newDoor] }));
-      setSelectedId(newDoor.id);
-      setSelectedType('door');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة الباب (Ctrl+Z للتراجع)' : 'Porte ajoutée sur le plan (Ctrl+Z pour annuler).');
-    } else if (tool === 'emergency_exit') {
-      const newExit: DoorElement = {
-        id: `exit_${Date.now()}`,
-        x,
-        y,
-        width: 1.1,
-        angle: 0,
-        isEmergencyExit: true,
-        label: 'Issue de Secours',
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, doors: [...prev.doors, newExit] }));
-      setSelectedId(newExit.id);
-      setSelectedType('door');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة مخرج الطوارئ (Ctrl+Z للتراجع)' : 'Issue de secours ajoutée sur le plan (Ctrl+Z pour annuler).');
-    } else if (tool === 'window') {
-      const newWin: WindowElement = {
-        id: `win_${Date.now()}`,
-        x,
-        y,
-        width: 1.4,
-        angle: 0,
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, windows: [...prev.windows, newWin] }));
-      setSelectedId(newWin.id);
-      setSelectedType('window');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة النافذة (Ctrl+Z للتراجع)' : 'Fenêtre ajoutée sur le plan (Ctrl+Z pour annuler).');
-    } else if (tool === 'camera_bullet') {
-      const nextNum = bulletCount + 1;
-      const newCam: SecurityDeviceElement = {
-        id: `dev_bullet_${Date.now()}`,
-        type: 'camera_bullet',
-        x,
-        y,
-        z: 2.8,
-        rotation: 45,
-        fovAngle: 85,
-        range: 12,
-        label: `CAM-${String(nextNum).padStart(2, '0')} Bullet Extérieure`,
-        modelName: 'Dahua IPC-HFW2431S 4MP',
-        isOutdoor: true,
-        resolution: '4MP / IR 30m',
-        channel: totalCams + 1,
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newCam] }));
-      setSelectedId(newCam.id);
-      setSelectedType('device');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة كاميرا أفقية (اسحب لتحريك الكاميرا)' : 'Caméra Bullet placée (Glissez pour déplacer / Ctrl+Z).');
-    } else if (tool === 'camera_dome') {
-      const nextNum = domeCount + 1;
-      const newDome: SecurityDeviceElement = {
-        id: `dev_dome_${Date.now()}`,
-        type: 'camera_dome',
-        x,
-        y,
-        z: 2.7,
-        rotation: 0,
-        fovAngle: 110,
-        range: 8,
-        label: `CAM-${String(nextNum).padStart(2, '0')} Dôme Intérieure`,
-        modelName: 'Hikvision DS-2CD2143G2 4MP',
-        isOutdoor: false,
-        resolution: '4MP AcuSense 1080p',
-        channel: totalCams + 1,
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newDome] }));
-      setSelectedId(newDome.id);
-      setSelectedType('device');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة كاميرا دائرية (اسحب لتحريك الكاميرا)' : 'Caméra Dôme placée (Glissez pour déplacer / Ctrl+Z).');
-    } else if (tool === 'dvr') {
-      const newDvr: SecurityDeviceElement = {
-        id: `dev_dvr_${Date.now()}`,
-        type: 'dvr',
-        x,
-        y,
-        z: 0.8,
-        rotation: 0,
-        fovAngle: 0,
-        range: 0,
-        label: 'Enregistreur NVR/DVR 16 Voies',
-        modelName: 'Dahua NVR4116-4KS2',
-        isOutdoor: false,
-        resolution: '16 Canaux 4K',
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newDvr] }));
-      setSelectedId(newDvr.id);
-      setSelectedType('device');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة جهاز التسجيل DVR' : 'Enregistreur DVR placé (Glissez pour déplacer / Ctrl+Z).');
-    } else if (tool === 'alarm_siren') {
-      const newAlarm: SecurityDeviceElement = {
-        id: `dev_alarm_${Date.now()}`,
-        type: 'alarm_siren',
-        x,
-        y,
-        z: 2.8,
-        rotation: 0,
-        fovAngle: 180,
-        range: 15,
-        label: 'Sirène Extérieure & Flash Alarme',
-        modelName: 'StreetSiren 113dB',
-        isOutdoor: true,
-        resolution: 'Alarme sonore & lumineuse',
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newAlarm] }));
-      setSelectedId(newAlarm.id);
-      setSelectedType('device');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة صفارة الإنذار' : 'Sirène d’alarme placée (Glissez pour déplacer / Ctrl+Z).');
-    } else if (tool === 'text') {
-      const newAnn: TextAnnotationElement = {
-        id: `ann_${Date.now()}`,
-        x,
-        y,
-        text: 'Zone de surveillance',
-        fontSize: 12,
-        color: '#047857',
-      };
-      recordUndoSnapshot();
-      setPlan((prev) => ({ ...prev, annotations: [...prev.annotations, newAnn] }));
-      setSelectedId(newAnn.id);
-      setSelectedType('annotation');
-      setActiveTool('select');
-      showToast(isRtl ? 'تمت إضافة النص' : 'Texte ajouté sur le plan (Ctrl+Z pour annuler).');
-    }
-  };
-
-  // Canvas Click / MouseDown Handler
-  const handleSvgMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (longPressMenu) {
-      setLongPressMenu(null);
-    }
-    const coords = getCanvasCoords(e);
-
-    // If in select, room, or device mode, initiate long-press detection
-    if (activeTool === 'select' || activeTool === 'camera_bullet' || activeTool === 'camera_dome') {
-      startLongPressTimer(e.clientX, e.clientY, coords);
-    }
-
-    if (activeTool === 'room') {
-      setIsDrawingRoom(true);
-      setDrawStart(coords);
-      setCurrentDrawCoord(coords);
-    } else if (
-      activeTool === 'door' ||
-      activeTool === 'emergency_exit' ||
-      activeTool === 'window' ||
-      activeTool === 'camera_bullet' ||
-      activeTool === 'camera_dome' ||
-      activeTool === 'dvr' ||
-      activeTool === 'alarm_siren' ||
-      activeTool === 'text'
-    ) {
-      createDeviceOrElementAtCoords(activeTool, coords.x, coords.y);
-    } else if (activeTool === 'select') {
-      // Clicked on empty canvas background -> deselect
-      if ((e.target as HTMLElement).tagName === 'svg') {
-        setSelectedId(null);
-        setSelectedType(null);
-      }
-    }
+      showToast(
+        isRtl
+          ? 'تم تفعيل التحريك: حرّك الفأرة أو الإصبع للموضع المطلوب'
+          : 'Déplacement actif : glissez pour positionner l’élément'
+      );
+    }, 280);
   };
 
   const handleSvgMouseMove = (
@@ -535,7 +473,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   ) => {
     let clientX = 0;
     let clientY = 0;
-    if ('touches' in e && e.touches && e.touches.length > 0) {
+    if ('touches' in e && e.touches.length > 0) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
     } else if ('clientX' in (e as any)) {
@@ -543,29 +481,41 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       clientY = (e as any).clientY;
     }
 
-    if (pressStartPosRef.current) {
+    if (pendingLongPress) {
       const dist = Math.hypot(
-        clientX - pressStartPosRef.current.clientX,
-        clientY - pressStartPosRef.current.clientY
+        clientX - pendingLongPress.clientX,
+        clientY - pendingLongPress.clientY
       );
       if (dist > 8) {
-        cancelLongPressTimer();
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+        setPendingLongPress(null);
       }
     }
 
     const coords = getCanvasCoords(e);
+
+    if (activeTool === 'measure' && measureStart) {
+      setMeasureCurrent(coords);
+    }
+
     if (isDrawingRoom) {
       setCurrentDrawCoord(coords);
-    } else if (isDraggingElement && selectedId) {
-      const newX = Math.max(0, Math.min(plan.widthMeters, coords.x - dragOffset.x));
-      const newY = Math.max(0, Math.min(plan.heightMeters, coords.y - dragOffset.y));
+    } else if (isDraggingElement && draggingId) {
+      const snap = gridSnapOn ? 0.25 : 0.05;
+      const rawX = coords.x - dragOffset.x;
+      const rawY = coords.y - dragOffset.y;
+      const newX = Math.max(0, Math.min(plan.widthMeters, Math.round(rawX / snap) * snap));
+      const newY = Math.max(0, Math.min(plan.heightMeters, Math.round(rawY / snap) * snap));
 
       setPlan((prev) => {
         if (selectedType === 'device') {
           return {
             ...prev,
             devices: prev.devices.map((d) =>
-              d.id === selectedId ? { ...d, x: newX, y: newY } : d
+              d.id === draggingId ? { ...d, x: newX, y: newY } : d
             ),
           };
         }
@@ -573,7 +523,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           return {
             ...prev,
             rooms: prev.rooms.map((r) =>
-              r.id === selectedId ? { ...r, x: newX, y: newY } : r
+              r.id === draggingId ? { ...r, x: newX, y: newY } : r
             ),
           };
         }
@@ -581,7 +531,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           return {
             ...prev,
             doors: prev.doors.map((d) =>
-              d.id === selectedId ? { ...d, x: newX, y: newY } : d
+              d.id === draggingId ? { ...d, x: newX, y: newY } : d
+            ),
+          };
+        }
+        if (selectedType === 'gate') {
+          return {
+            ...prev,
+            gates: (prev.gates || []).map((g) =>
+              g.id === draggingId ? { ...g, x: newX, y: newY } : g
+            ),
+          };
+        }
+        if (selectedType === 'stairs') {
+          return {
+            ...prev,
+            stairs: (prev.stairs || []).map((s) =>
+              s.id === draggingId ? { ...s, x: newX, y: newY } : s
             ),
           };
         }
@@ -589,7 +555,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           return {
             ...prev,
             windows: prev.windows.map((w) =>
-              w.id === selectedId ? { ...w, x: newX, y: newY } : w
+              w.id === draggingId ? { ...w, x: newX, y: newY } : w
             ),
           };
         }
@@ -597,7 +563,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           return {
             ...prev,
             annotations: prev.annotations.map((a) =>
-              a.id === selectedId ? { ...a, x: newX, y: newY } : a
+              a.id === draggingId ? { ...a, x: newX, y: newY } : a
             ),
           };
         }
@@ -607,7 +573,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const handleSvgMouseUp = () => {
-    cancelLongPressTimer();
+    // If long press timer was still active, it was a SIMPLE TAP/CLICK!
+    if (longPressTimerRef.current && pendingLongPress) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+      setSelectedId(pendingLongPress.id);
+      setSelectedType(pendingLongPress.type);
+      setPendingLongPress(null);
+      return;
+    }
 
     if (isDrawingRoom && drawStart && currentDrawCoord) {
       const x = Math.min(drawStart.x, currentDrawCoord.x);
@@ -635,46 +609,316 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setDrawStart(null);
       setCurrentDrawCoord(null);
       setActiveTool('select');
-      showToast(isRtl ? 'تم رسم الغرفة بنجاح (Ctrl+Z للتراجع)' : 'Nouvelle pièce dessinée (Ctrl+Z pour annuler).');
+      showToast(isRtl ? 'تم رسم الغرفة بنجاح' : 'Nouvelle pièce dessinée (Ctrl+Z pour annuler).');
     }
 
     if (isDraggingElement && dragStartPlanRef.current) {
       if (JSON.stringify(dragStartPlanRef.current) !== JSON.stringify(plan)) {
-        setUndoStack((prev) => [...prev.slice(-29), dragStartPlanRef.current!]);
+        setUndoStack((prev) => [...prev.slice(-34), dragStartPlanRef.current!]);
         setRedoStack([]);
+        showToast(isRtl ? 'تم تثبيت الموضع بنجاح' : 'Élément positionné avec succès (Ctrl+Z pour annuler).');
       }
       dragStartPlanRef.current = null;
-    }
-    setIsDraggingElement(false);
-  };
-
-  // Select element on click/touch or erase if in eraser mode (Always enables direct dragging/sliding)
-  const handleElementMouseDown = (
-    e: React.MouseEvent | React.TouchEvent,
-    id: string,
-    type: 'room' | 'door' | 'window' | 'device' | 'annotation',
-    itemX: number,
-    itemY: number
-  ) => {
-    e.stopPropagation();
-    cancelLongPressTimer();
-
-    if (activeTool === 'eraser') {
-      handleEraseElement(id, type);
-      return;
+      setIsDraggingElement(false);
+      setDraggingId(null);
     }
 
-    // Direct sliding: immediately activate select and start dragging!
-    setActiveTool('select');
-    dragStartPlanRef.current = JSON.parse(JSON.stringify(plan));
-    setSelectedId(id);
-    setSelectedType(type);
-    setIsDraggingElement(true);
-    const coords = getCanvasCoords(e as any);
-    setDragOffset({ x: coords.x - itemX, y: coords.y - itemY });
+    if (activeTool === 'measure' && measureStart && measureCurrent) {
+      const dist = Math.hypot(measureCurrent.x - measureStart.x, measureCurrent.y - measureStart.y);
+      showToast(`Distance mesurée : ${dist.toFixed(2)} mètres`);
+      setMeasureStart(null);
+      setMeasureCurrent(null);
+    }
   };
 
-  // Rotate selected item
+  const handleSvgMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    const coords = getCanvasCoords(e);
+
+    if (activeTool === 'room') {
+      setIsDrawingRoom(true);
+      setDrawStart(coords);
+      setCurrentDrawCoord(coords);
+    } else if (activeTool === 'measure') {
+      setMeasureStart(coords);
+      setMeasureCurrent(coords);
+    } else if (
+      activeTool === 'door' ||
+      activeTool === 'gate' ||
+      activeTool === 'stairs' ||
+      activeTool === 'emergency_exit' ||
+      activeTool === 'window' ||
+      activeTool === 'camera_bullet' ||
+      activeTool === 'camera_dome' ||
+      activeTool === 'camera_ptz' ||
+      activeTool === 'dvr' ||
+      activeTool === 'alarm_siren' ||
+      activeTool === 'pir_sensor' ||
+      activeTool === 'monitor_screen' ||
+      activeTool === 'text'
+    ) {
+      createDeviceOrElementAtCoords(activeTool, coords.x, coords.y);
+    } else if (activeTool === 'select') {
+      if ((e.target as HTMLElement).tagName === 'svg' || (e.target as HTMLElement).tagName === 'rect') {
+        setSelectedId(null);
+        setSelectedType(null);
+      }
+    }
+  };
+
+  const createDeviceOrElementAtCoords = (tool: ToolType, x: number, y: number) => {
+    if (tool === 'room' || tool === 'eraser' || tool === 'select' || tool === 'measure') return;
+
+    if (tool === 'door') {
+      const newDoor: DoorElement = {
+        id: `door_${Date.now()}`,
+        x,
+        y,
+        width: 1.0,
+        angle: 0,
+        isEmergencyExit: false,
+        label: 'Porte d’accès',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, doors: [...prev.doors, newDoor] }));
+      setSelectedId(newDoor.id);
+      setSelectedType('door');
+      setActiveTool('select');
+      showToast('Porte ajoutée (Appui long + glisser pour déplacer).');
+    } else if (tool === 'gate') {
+      const newGate: GateElement = {
+        id: `gate_${Date.now()}`,
+        x,
+        y,
+        width: 3.5,
+        angle: 0,
+        isMotorized: true,
+        label: 'Portail Véhicules Motorisé (3.5m)',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, gates: [...(prev.gates || []), newGate] }));
+      setSelectedId(newGate.id);
+      setSelectedType('gate');
+      setActiveTool('select');
+      showToast('Portail d’accès véhicules ajouté sur le plan.');
+    } else if (tool === 'stairs') {
+      const newStair: StairElement = {
+        id: `stairs_${Date.now()}`,
+        x,
+        y,
+        width: 1.2,
+        length: 2.8,
+        steps: 12,
+        angle: 0,
+        direction: 'up',
+        label: 'Escalier Accès Étage',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, stairs: [...(prev.stairs || []), newStair] }));
+      setSelectedId(newStair.id);
+      setSelectedType('stairs');
+      setActiveTool('select');
+      showToast('Escalier d’accès ajouté sur le plan.');
+    } else if (tool === 'emergency_exit') {
+      const newExit: DoorElement = {
+        id: `exit_${Date.now()}`,
+        x,
+        y,
+        width: 1.1,
+        angle: 0,
+        isEmergencyExit: true,
+        label: 'Issue de Secours',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, doors: [...prev.doors, newExit] }));
+      setSelectedId(newExit.id);
+      setSelectedType('door');
+      setActiveTool('select');
+      showToast('Issue de secours ajoutée sur le plan.');
+    } else if (tool === 'window') {
+      const newWin: WindowElement = {
+        id: `win_${Date.now()}`,
+        x,
+        y,
+        width: 1.4,
+        angle: 0,
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, windows: [...prev.windows, newWin] }));
+      setSelectedId(newWin.id);
+      setSelectedType('window');
+      setActiveTool('select');
+      showToast('Fenêtre vitrée ajoutée.');
+    } else if (tool === 'camera_bullet') {
+      const nextNum = bulletCount + 1;
+      const newCam: SecurityDeviceElement = {
+        id: `dev_bullet_${Date.now()}`,
+        type: 'camera_bullet',
+        x,
+        y,
+        z: 2.8,
+        rotation: 45,
+        fovAngle: 85,
+        range: 12,
+        label: `CAM-${String(nextNum).padStart(2, '0')} Bullet Extérieure`,
+        modelName: 'Dahua IPC-HFW2431S 4MP',
+        isOutdoor: true,
+        resolution: '4MP / IR 30m',
+        channel: totalCams + 1,
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newCam] }));
+      setSelectedId(newCam.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Caméra Bullet placée (Appui long + glisser pour déplacer).');
+    } else if (tool === 'camera_dome') {
+      const nextNum = domeCount + 1;
+      const newDome: SecurityDeviceElement = {
+        id: `dev_dome_${Date.now()}`,
+        type: 'camera_dome',
+        x,
+        y,
+        z: 2.7,
+        rotation: 0,
+        fovAngle: 110,
+        range: 8,
+        label: `CAM-${String(nextNum).padStart(2, '0')} Dôme Intérieure`,
+        modelName: 'Hikvision DS-2CD2143G2 4MP',
+        isOutdoor: false,
+        resolution: '4MP AcuSense 1080p',
+        channel: totalCams + 1,
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newDome] }));
+      setSelectedId(newDome.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Caméra Dôme placée.');
+    } else if (tool === 'camera_ptz') {
+      const nextNum = ptzCount + 1;
+      const newPtz: SecurityDeviceElement = {
+        id: `dev_ptz_${Date.now()}`,
+        type: 'camera_ptz',
+        x,
+        y,
+        z: 3.5,
+        rotation: 0,
+        fovAngle: 360,
+        range: 22,
+        label: `CAM-${String(nextNum).padStart(2, '0')} PTZ 360° Motorisée`,
+        modelName: 'Dahua SD49225XA-HNR (25x Zoom)',
+        isOutdoor: true,
+        resolution: '4MP Starlight Panoramique',
+        channel: totalCams + 1,
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newPtz] }));
+      setSelectedId(newPtz.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Caméra PTZ 360° motorisée placée sur le plan.');
+    } else if (tool === 'dvr') {
+      const newDvr: SecurityDeviceElement = {
+        id: `dev_dvr_${Date.now()}`,
+        type: 'dvr',
+        x,
+        y,
+        z: 0.8,
+        rotation: 0,
+        fovAngle: 0,
+        range: 0,
+        label: 'Enregistreur NVR/DVR 16 Voies',
+        modelName: 'Dahua NVR4116-4KS2 (HDD 4To)',
+        isOutdoor: false,
+        resolution: '16 Canaux 4K',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newDvr] }));
+      setSelectedId(newDvr.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Enregistreur NVR/DVR placé.');
+    } else if (tool === 'monitor_screen') {
+      const newScreen: SecurityDeviceElement = {
+        id: `dev_screen_${Date.now()}`,
+        type: 'monitor_screen',
+        x,
+        y,
+        z: 1.2,
+        rotation: 0,
+        fovAngle: 0,
+        range: 0,
+        label: 'Écran Moniteur Vidéo 32" 4K',
+        modelName: 'Moniteur Surveillance 4K 24/7',
+        isOutdoor: false,
+        resolution: '4K Ultra HD',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newScreen] }));
+      setSelectedId(newScreen.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Moniteur de contrôle placé.');
+    } else if (tool === 'alarm_siren') {
+      const newAlarm: SecurityDeviceElement = {
+        id: `dev_alarm_${Date.now()}`,
+        type: 'alarm_siren',
+        x,
+        y,
+        z: 2.8,
+        rotation: 0,
+        fovAngle: 180,
+        range: 15,
+        label: 'Sirène Extérieure & Flash Alarme',
+        modelName: 'StreetSiren 113dB',
+        isOutdoor: true,
+        resolution: 'Alarme sonore & lumineuse',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newAlarm] }));
+      setSelectedId(newAlarm.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Sirène d’alarme placée.');
+    } else if (tool === 'pir_sensor') {
+      const newPir: SecurityDeviceElement = {
+        id: `dev_pir_${Date.now()}`,
+        type: 'pir_sensor',
+        x,
+        y,
+        z: 2.2,
+        rotation: 0,
+        fovAngle: 90,
+        range: 8,
+        label: 'Détecteur Intrusion Volumétrique PIR',
+        modelName: 'Ajax MotionProtect',
+        isOutdoor: false,
+        resolution: 'Détecteur PIR',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, devices: [...prev.devices, newPir] }));
+      setSelectedId(newPir.id);
+      setSelectedType('device');
+      setActiveTool('select');
+      showToast('Détecteur PIR placé.');
+    } else if (tool === 'text') {
+      const newAnn: TextAnnotationElement = {
+        id: `ann_${Date.now()}`,
+        x,
+        y,
+        text: 'Zone sous surveillance 24h/24',
+        fontSize: 12,
+        color: '#047857',
+      };
+      recordUndoSnapshot();
+      setPlan((prev) => ({ ...prev, annotations: [...prev.annotations, newAnn] }));
+      setSelectedId(newAnn.id);
+      setSelectedType('annotation');
+      setActiveTool('select');
+      showToast('Texte d’annotation ajouté.');
+    }
+  };
+
   const handleRotateSelected = (delta: number) => {
     if (!selectedId) return;
     recordUndoSnapshot();
@@ -693,9 +937,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         return {
           ...prev,
           doors: prev.doors.map((d) =>
-            d.id === selectedId
-              ? { ...d, angle: (d.angle + delta + 360) % 360 }
-              : d
+            d.id === selectedId ? { ...d, angle: (d.angle + delta + 360) % 360 } : d
+          ),
+        };
+      }
+      if (selectedType === 'gate') {
+        return {
+          ...prev,
+          gates: (prev.gates || []).map((g) =>
+            g.id === selectedId ? { ...g, angle: (g.angle + delta + 360) % 360 } : g
+          ),
+        };
+      }
+      if (selectedType === 'stairs') {
+        return {
+          ...prev,
+          stairs: (prev.stairs || []).map((s) =>
+            s.id === selectedId ? { ...s, angle: (s.angle + delta + 360) % 360 } : s
           ),
         };
       }
@@ -703,9 +961,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         return {
           ...prev,
           windows: prev.windows.map((w) =>
-            w.id === selectedId
-              ? { ...w, angle: (w.angle + delta + 360) % 360 }
-              : w
+            w.id === selectedId ? { ...w, angle: (w.angle + delta + 360) % 360 } : w
           ),
         };
       }
@@ -713,7 +969,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     });
   };
 
-  // Delete selected item
   const handleDeleteSelected = () => {
     if (!selectedId) return;
     recordUndoSnapshot();
@@ -721,6 +976,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       ...prev,
       rooms: prev.rooms.filter((r) => r.id !== selectedId),
       doors: prev.doors.filter((d) => d.id !== selectedId),
+      gates: (prev.gates || []).filter((g) => g.id !== selectedId),
+      stairs: (prev.stairs || []).filter((s) => s.id !== selectedId),
       windows: prev.windows.filter((w) => w.id !== selectedId),
       devices: prev.devices.filter((dev) => dev.id !== selectedId),
       annotations: prev.annotations.filter((a) => a.id !== selectedId),
@@ -728,13 +985,145 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setSelectedId(null);
     setSelectedType(null);
     setHoveredEraseId(null);
-    showToast(isRtl ? 'تم حذف العنصر (يمكنك التراجع بـ Ctrl+Z)' : 'Élément supprimé (annulable via Ctrl+Z).');
+    showToast(isRtl ? 'تم حذف العنصر' : 'Élément supprimé (Ctrl+Z pour annuler).');
   };
 
-  // Synchronize with DRAG Oran PDF Page 3
+  // 1-Click Auto-Secure
+  const handleAutoSecurePlan = () => {
+    recordUndoSnapshot();
+    const newDevices: SecurityDeviceElement[] = [];
+
+    // 1. Cover vehicle gate with bullet camera for LPR
+    (plan.gates || []).forEach((gate, gIdx) => {
+      newDevices.push({
+        id: `auto_gate_cam_${gIdx}_${Date.now()}`,
+        type: 'camera_bullet',
+        x: Math.round(Math.max(1, gate.x) * 4) / 4,
+        y: Math.round(Math.max(1, gate.y + 2.5) * 4) / 4,
+        z: 2.8,
+        rotation: 270,
+        fovAngle: 85,
+        range: 14,
+        label: `CAM-0${newDevices.length + 1} Portail Véhicules & LPR`,
+        modelName: 'Dahua IPC-HFW2431S 4MP',
+        isOutdoor: true,
+        resolution: '5MP 4K UHD - IR 30m',
+        channel: newDevices.length + 1,
+      });
+    });
+
+    // 2. Cover doors with cameras
+    plan.doors.forEach((door, idx) => {
+      const isExit = door.isEmergencyExit;
+      const camId = `auto_cam_door_${idx + 1}_${Date.now()}`;
+      const angleRad = (door.angle * Math.PI) / 180;
+      const offsetX = Math.cos(angleRad + Math.PI / 2) * 2.5;
+      const offsetY = Math.sin(angleRad + Math.PI / 2) * 2.5;
+      const camX = Math.max(1, Math.min(plan.widthMeters - 1, door.x + offsetX));
+      const camY = Math.max(1, Math.min(plan.heightMeters - 1, door.y + offsetY));
+      const targetAngle = (Math.atan2(door.y - camY, door.x - camX) * 180) / Math.PI;
+
+      newDevices.push({
+        id: camId,
+        type: isExit ? 'camera_dome' : 'camera_bullet',
+        x: Math.round(camX * 4) / 4,
+        y: Math.round(camY * 4) / 4,
+        z: 2.8,
+        rotation: Math.round((targetAngle + 360) % 360),
+        fovAngle: 90,
+        range: 12,
+        label: isExit
+          ? `CAM-0${newDevices.length + 1} Issue de Secours`
+          : `CAM-0${newDevices.length + 1} Surveillance Entrée`,
+        modelName: isExit ? 'Hikvision DS-2CD2143G2' : 'Dahua IPC-HFW2431S 4MP',
+        isOutdoor: !isExit,
+        resolution: '4MP AcuSense 1080p',
+        channel: newDevices.length + 1,
+      });
+    });
+
+    // 3. Central indoor dome in main rooms
+    plan.rooms.slice(0, 2).forEach((room, rIdx) => {
+      const centerX = Math.round((room.x + room.width / 2) * 4) / 4;
+      const centerY = Math.round((room.y + room.height / 2) * 4) / 4;
+      newDevices.push({
+        id: `auto_room_cam_${rIdx}_${Date.now()}`,
+        type: 'camera_dome',
+        x: centerX,
+        y: centerY,
+        z: 2.7,
+        rotation: 0,
+        fovAngle: 120,
+        range: 8,
+        label: `CAM-0${newDevices.length + 1} Panoramique ${room.name}`,
+        modelName: 'Dahua IPC-HDBW2431E 4MP',
+        isOutdoor: false,
+        resolution: '4MP Grand Angle 360°',
+        channel: newDevices.length + 1,
+      });
+    });
+
+    // 4. Add NVR & Monitor in technical room
+    const safeRoom = plan.rooms[plan.rooms.length - 1] || { x: 2, y: 2, width: 4, height: 3 };
+    newDevices.push({
+      id: `auto_dvr_${Date.now()}`,
+      type: 'dvr',
+      x: Math.round((safeRoom.x + 1.2) * 4) / 4,
+      y: Math.round((safeRoom.y + 1.2) * 4) / 4,
+      z: 0.8,
+      rotation: 0,
+      fovAngle: 0,
+      range: 0,
+      label: 'NVR 16 Canaux 4K (Local Sécurisé)',
+      modelName: 'Dahua NVR4116-4KS2 (4 To HDD)',
+      isOutdoor: false,
+      resolution: '16 Canaux 4K H.265+',
+    });
+
+    newDevices.push({
+      id: `auto_monitor_${Date.now()}`,
+      type: 'monitor_screen',
+      x: Math.round((safeRoom.x + 2.2) * 4) / 4,
+      y: Math.round((safeRoom.y + 1.2) * 4) / 4,
+      z: 1.2,
+      rotation: 0,
+      fovAngle: 0,
+      range: 0,
+      label: 'Moniteur Surveillance PC Sécurité 32"',
+      modelName: 'Moniteur 32" Ultra HD',
+      isOutdoor: false,
+      resolution: '4K Ultra HD',
+    });
+
+    // 5. Add siren near front door or gate
+    const frontPos = (plan.gates && plan.gates[0]) || plan.doors[0] || { x: 4, y: 4 };
+    newDevices.push({
+      id: `auto_alarm_${Date.now()}`,
+      type: 'alarm_siren',
+      x: Math.max(1, frontPos.x - 1.5),
+      y: Math.max(1, frontPos.y),
+      z: 2.8,
+      rotation: 90,
+      fovAngle: 180,
+      range: 15,
+      label: 'Sirène Extérieure Flash Auto-protégée',
+      modelName: 'Ajax StreetSiren 113dB',
+      isOutdoor: true,
+      resolution: '113 dB Lumineux',
+    });
+
+    setPlan((prev) => ({
+      ...prev,
+      devices: newDevices,
+    }));
+    setSelectedId(newDevices[0]?.id || null);
+    setSelectedType('device');
+    showToast(t.autoSecureToast);
+  };
+
   const handleSyncToForm = () => {
     if (onSyncWithPdfForm) {
-      const camTypesSummary = `${bulletCount} Bullet Ext. (${outdoorCams} Ext / ${indoorCams} Int)`;
+      const camTypesSummary = `${bulletCount} Bullet Ext. (${outdoorCams} Ext / ${indoorCams} Int)${ptzCount > 0 ? ` + ${ptzCount} PTZ 360°` : ''}`;
       const recorderTypeSummary = `${dvrCount} NVR/DVR 16 Voies`;
       onSyncWithPdfForm({
         indoorCamQty: indoorCams,
@@ -745,12 +1134,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         recorderTypeSummary,
       });
       showToast(
-        `Synchronisé ! Page 3 du Formulaire DRAG mise à jour : ${totalCams} caméras (${outdoorCams} ext, ${indoorCams} int), ${dvrCount} DVR.`
+        `Synchronisé ! Page 3 du Formulaire DRAG mise à jour : ${totalCams} caméras, ${dvrCount} DVR, ${gateCount} portail(s).`
       );
     }
   };
 
-  // Export Plan to High-Resolution PNG Image with Cartouche
+  // Export Plan to High-Resolution PNG with Cartouche
   const handleExportPlanImage = () => {
     const canvas = document.createElement('canvas');
     const width = 1600;
@@ -760,11 +1149,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Title Block / Cartouche Officiel DRAG Oran
     ctx.fillStyle = '#047857';
     ctx.fillRect(0, 0, width, 75);
 
@@ -774,73 +1161,116 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     ctx.font = '15px "Plus Jakarta Sans", sans-serif';
     ctx.fillText(`Plan de Situation & Implantation CCTV — ${plan.name} · Demandeur: ${applicantName}`, 30, 60);
 
-    // Grid on plan area
     const offsetX = 50;
     const offsetY = 110;
     const planWidthPx = width - 100;
     const planHeightPx = height - 240;
     const scaleFactor = Math.min(
-      planWidthPx / (plan.widthMeters * SCALE),
-      planHeightPx / (plan.heightMeters * SCALE)
+      planWidthPx / (plan.widthMeters * BASE_SCALE),
+      planHeightPx / (plan.heightMeters * BASE_SCALE)
     );
 
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scaleFactor, scaleFactor);
 
-    // Draw Rooms
+    // Rooms
     plan.rooms.forEach((r) => {
       ctx.fillStyle = r.color || '#f8fafc';
-      ctx.fillRect(r.x * SCALE, r.y * SCALE, r.width * SCALE, r.height * SCALE);
+      ctx.fillRect(r.x * BASE_SCALE, r.y * BASE_SCALE, r.width * BASE_SCALE, r.height * BASE_SCALE);
       ctx.lineWidth = 4;
       ctx.strokeStyle = '#0f172a';
-      ctx.strokeRect(r.x * SCALE, r.y * SCALE, r.width * SCALE, r.height * SCALE);
+      ctx.strokeRect(r.x * BASE_SCALE, r.y * BASE_SCALE, r.width * BASE_SCALE, r.height * BASE_SCALE);
 
-      // Room Name
       ctx.fillStyle = '#334155';
       ctx.font = 'bold 14px sans-serif';
-      ctx.fillText(r.name, r.x * SCALE + 10, r.y * SCALE + 24);
+      ctx.fillText(r.name, r.x * BASE_SCALE + 10, r.y * BASE_SCALE + 24);
     });
 
-    // Draw Doors & Exits
+    // Stairs
+    (plan.stairs || []).forEach((stair) => {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(stair.x * BASE_SCALE, stair.y * BASE_SCALE, stair.width * BASE_SCALE, stair.length * BASE_SCALE);
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(stair.x * BASE_SCALE, stair.y * BASE_SCALE, stair.width * BASE_SCALE, stair.length * BASE_SCALE);
+
+      // Steps lines
+      const stepCount = stair.steps || 12;
+      const stepH = (stair.length * BASE_SCALE) / stepCount;
+      for (let i = 1; i < stepCount; i++) {
+        ctx.beginPath();
+        ctx.moveTo(stair.x * BASE_SCALE, stair.y * BASE_SCALE + i * stepH);
+        ctx.lineTo(stair.x * BASE_SCALE + stair.width * BASE_SCALE, stair.y * BASE_SCALE + i * stepH);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText('ESCALIER', stair.x * BASE_SCALE + 4, stair.y * BASE_SCALE + 14);
+    });
+
+    // Gates
+    (plan.gates || []).forEach((gate) => {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(gate.x * BASE_SCALE - 6, gate.y * BASE_SCALE - 6, 12, 12);
+      ctx.fillRect((gate.x + gate.width) * BASE_SCALE - 6, gate.y * BASE_SCALE - 6, 12, 12);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(gate.x * BASE_SCALE, gate.y * BASE_SCALE);
+      ctx.lineTo((gate.x + gate.width) * BASE_SCALE, gate.y * BASE_SCALE);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('PORTAIL', gate.x * BASE_SCALE + 10, gate.y * BASE_SCALE - 10);
+    });
+
+    // Doors
     plan.doors.forEach((d) => {
       ctx.fillStyle = d.isEmergencyExit ? '#16a34a' : '#78350f';
-      ctx.fillRect(d.x * SCALE - 12, d.y * SCALE - 6, 24, 12);
+      ctx.fillRect(d.x * BASE_SCALE - 12, d.y * BASE_SCALE - 6, 24, 12);
       ctx.font = '10px sans-serif';
-      ctx.fillText(d.isEmergencyExit ? 'ISSUE' : 'PORTE', d.x * SCALE - 16, d.y * SCALE - 10);
+      ctx.fillText(d.isEmergencyExit ? 'ISSUE' : 'PORTE', d.x * BASE_SCALE - 16, d.y * BASE_SCALE - 10);
     });
 
-    // Draw Cameras & Vision Cones
+    // Devices & Vision Cones
     plan.devices.forEach((dev) => {
-      const cx = dev.x * SCALE;
-      const cy = dev.y * SCALE;
+      const cx = dev.x * BASE_SCALE;
+      const cy = dev.y * BASE_SCALE;
 
-      if (dev.type === 'camera_bullet' || dev.type === 'camera_dome') {
-        // Vision Cone
+      if (dev.type === 'camera_bullet' || dev.type === 'camera_dome' || dev.type === 'camera_ptz') {
         const angleRad = (dev.rotation * Math.PI) / 180;
         const halfFov = ((dev.fovAngle || 80) * Math.PI) / 360;
-        const rangePx = (dev.range || 10) * SCALE;
+        const rangePx = (dev.range || 10) * BASE_SCALE;
 
         ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, rangePx, angleRad - halfFov, angleRad + halfFov);
-        ctx.closePath();
-        ctx.fillStyle = dev.isOutdoor ? 'rgba(16, 185, 129, 0.22)' : 'rgba(56, 189, 248, 0.22)';
+        if (dev.type === 'camera_ptz') {
+          ctx.arc(cx, cy, rangePx, 0, Math.PI * 2);
+        } else {
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, rangePx, angleRad - halfFov, angleRad + halfFov);
+          ctx.closePath();
+        }
+        ctx.fillStyle =
+          dev.type === 'camera_ptz'
+            ? 'rgba(168, 85, 247, 0.18)'
+            : dev.isOutdoor
+            ? 'rgba(16, 185, 129, 0.22)'
+            : 'rgba(56, 189, 248, 0.22)';
         ctx.fill();
-        ctx.strokeStyle = dev.isOutdoor ? '#059669' : '#0284c7';
+        ctx.strokeStyle = dev.type === 'camera_ptz' ? '#9333ea' : dev.isOutdoor ? '#059669' : '#0284c7';
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Camera Icon
         ctx.beginPath();
         ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-        ctx.fillStyle = dev.type === 'camera_bullet' ? '#047857' : '#0284c7';
+        ctx.fillStyle = dev.type === 'camera_ptz' ? '#9333ea' : dev.type === 'camera_bullet' ? '#047857' : '#0284c7';
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
 
-        // Label
         ctx.fillStyle = '#0f172a';
         ctx.font = 'bold 11px sans-serif';
         ctx.fillText(dev.label, cx + 14, cy + 4);
@@ -869,18 +1299,27 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText('LÉGENDE OFFICIELLE DU SCHÉMA :', 30, height - 60);
     ctx.font = '12px sans-serif';
-    ctx.fillText(`• Caméras Extérieures (Bullet) : ${outdoorCams} unités  |  • Caméras Intérieures (Dôme) : ${indoorCams} unités`, 30, height - 38);
-    ctx.fillText(`• Enregistreur DVR/NVR : ${dvrCount} unité(s)  |  • Sirène Alarme : ${alarmCount}  |  • Issues de Secours : ${plan.doors.filter(d => d.isEmergencyExit).length}`, 30, height - 18);
+    ctx.fillText(
+      `• Caméras Extérieures (Bullet/PTZ) : ${outdoorCams} unités  |  • Caméras Intérieures (Dôme) : ${indoorCams} unités  |  • Portails : ${gateCount}  |  • Escaliers : ${stairCount}`,
+      30,
+      height - 38
+    );
+    ctx.fillText(
+      `• Enregistreur DVR/NVR : ${dvrCount} unité(s)  |  • Moniteurs : ${monitorCount}  |  • Sirènes : ${alarmCount}  |  • Couverture du site : ${siteCoverageScore}%`,
+      30,
+      height - 18
+    );
 
     ctx.fillText(`Généré le ${new Date().toLocaleDateString('fr-FR')} — Système Conforme DRAG Wilaya d'Oran`, width - 420, height - 20);
 
-    // Download PNG
     const link = document.createElement('a');
     link.download = `schema_cctv_${plan.name.replace(/\s+/g, '_')}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
     showToast('Schéma d’implantation exporté en PNG haute définition.');
   };
+
+  const activePovCamera = plan.devices.find((d) => d.id === simulatedCameraId);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
@@ -896,41 +1335,38 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80">
-              Module Schéma d'Implantation CCTV 2D/3D
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/80">
+              Module CCTV 2D/3D & Assistant Débutant
             </span>
             <span className="text-xs text-slate-500">
               Conforme Arrêté Interministériel DRAG Wilaya d’Oran
             </span>
           </div>
           <h1 className="text-lg sm:text-xl font-bold text-slate-900">
-            Schéma Architectural du Bâti & Positionnement des Caméras
+            {t.floorPlanTitle}
           </h1>
           <p className="text-xs text-slate-600 max-w-3xl">
-            Dessinez les pièces, murs, portes, fenêtres et issues de secours. Placez les caméras
-            bullet, dôme, DVR et sirènes avec leurs angles et portées, visualisez en 3D
-            isométrique, et synchronisez automatiquement les quantités sur la Page 3 du Formulaire
-            Officiel.
+            {t.floorPlanSubtitle}
           </p>
         </div>
 
-        {/* 2D / 3D Mode Switcher & Sync Button */}
+        {/* 2D / 3D Switcher & Fast Actions */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <div className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-200">
             <button
               onClick={() => setViewMode('2d')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === '2d'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Plan 2D (Dessin)</span>
+              <span>Plan 2D</span>
             </button>
             <button
               onClick={() => setViewMode('3d')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === '3d'
                   ? 'bg-emerald-700 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -942,12 +1378,21 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           </div>
 
           <button
-            onClick={handleSyncToForm}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer shadow-xs"
-            title="Copier les quantités de caméras et DVR vers la Page 3 du formulaire DRAG"
+            onClick={handleAutoSecurePlan}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 rounded-lg transition-colors cursor-pointer shadow-xs"
+            title="Analyser le plan et placer automatiquement les caméras sur toutes les entrées"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Synchroniser vers Formulaire PDF</span>
+            <span>{t.btnAutoSecure}</span>
+          </button>
+
+          <button
+            onClick={handleSyncToForm}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors cursor-pointer shadow-xs"
+            title="Copier les quantités vers la Page 3 du formulaire DRAG"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Sync Page 3</span>
           </button>
 
           <button
@@ -956,56 +1401,185 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             title="Télécharger le plan avec le cartouche officiel DRAG Wilaya d'Oran"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Télécharger Plan (PNG)</span>
+            <span>PNG Haute Déf.</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Summary Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs font-medium">
+      {/* Beginner Step-by-Step Guide Banner */}
+      {showBeginnerGuide && (
+        <div className="bg-slate-900 text-white rounded-xl p-3 sm:p-4 border border-slate-800 shadow-md space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-emerald-600/30 text-emerald-400 rounded-lg">
+                <HelpCircle className="w-4 h-4" />
+              </span>
+              <div>
+                <h3 className="text-xs sm:text-sm font-bold text-white">
+                  Guide Pas-à-Pas Simplifié · Créer votre schéma sans effort
+                </h3>
+                <p className="text-[11px] text-slate-300">
+                  {t.longPressDragHint} · {t.tapToSelectHint}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowBeginnerGuide(false)}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors text-xs flex items-center gap-1 cursor-pointer"
+            >
+              <span>Masquer</span>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <button
+              onClick={() => {
+                setActiveStep(1);
+                setActiveTool('room');
+              }}
+              className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                activeStep === 1
+                  ? 'bg-emerald-950/80 border-emerald-500 text-white ring-1 ring-emerald-500'
+                  : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <div className="font-bold flex items-center gap-1.5 text-emerald-400">
+                <Box className="w-3.5 h-3.5" />
+                <span>{t.step1Rooms}</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-1">
+                Tracez les pièces et configurez les murs.
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveStep(2);
+                setActiveTool('gate');
+              }}
+              className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                activeStep === 2
+                  ? 'bg-emerald-950/80 border-emerald-500 text-white ring-1 ring-emerald-500'
+                  : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <div className="font-bold flex items-center gap-1.5 text-amber-400">
+                <Fence className="w-3.5 h-3.5" />
+                <span>2. Portails & Escaliers</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-1">
+                Ajoutez portails véhicules, escaliers, portes.
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveStep(3);
+                setActiveTool('camera_bullet');
+              }}
+              className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                activeStep === 3
+                  ? 'bg-emerald-950/80 border-emerald-500 text-white ring-1 ring-emerald-500'
+                  : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <div className="font-bold flex items-center gap-1.5 text-cyan-400">
+                <Video className="w-3.5 h-3.5" />
+                <span>{t.step3Cameras}</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-1">
+                Déposez caméras Bullet, Dôme, PTZ 360°, NVR.
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveStep(4);
+                handleSyncToForm();
+              }}
+              className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                activeStep === 4
+                  ? 'bg-emerald-950/80 border-emerald-500 text-white ring-1 ring-emerald-500'
+                  : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <div className="font-bold flex items-center gap-1.5 text-emerald-400">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{t.step4Export}</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-1">
+                Exportez le PNG et synchronisez le PDF officiel.
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Safety Audit & Stats Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+        <div className="bg-white border border-slate-200 rounded-lg p-2.5 space-y-1">
+          <div className="flex items-center justify-between text-slate-500">
+            <span>{t.coveragePercent}:</span>
+            <span className="font-bold text-slate-900">{siteCoverageScore}%</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${
+                siteCoverageScore >= 80 ? 'bg-emerald-600' : 'bg-amber-500'
+              }`}
+              style={{ width: `${siteCoverageScore}%` }}
+            />
+          </div>
+        </div>
+
         <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
           <span className="text-slate-500">Total Caméras:</span>
-          <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+          <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded font-mono">
             {totalCams}
           </span>
         </div>
+
         <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
-          <span className="text-slate-500">Extérieures (Bullet):</span>
-          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+          <span className="text-slate-500">Portails & Escaliers:</span>
+          <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded font-mono">
+            {gateCount + stairCount}
+          </span>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
+          <span className="text-slate-500">Extérieures / PTZ:</span>
+          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono">
             {outdoorCams}
           </span>
         </div>
+
         <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
-          <span className="text-slate-500">Intérieures (Dôme):</span>
-          <span className="font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded">
-            {indoorCams}
+          <span className="text-slate-500">Autonomie 30j :</span>
+          <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-mono">
+            {recommendedHddTb}
           </span>
         </div>
+
         <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
-          <span className="text-slate-500">Enregistreurs DVR:</span>
-          <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-            {dvrCount}
-          </span>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
-          <span className="text-slate-500">Sirènes / Alarme:</span>
-          <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-            {alarmCount}
-          </span>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
-          <span className="text-slate-500">Issues de Secours:</span>
-          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-            {plan.doors.filter((d) => d.isEmergencyExit).length}
+          <span className="text-slate-500">Accès Couverts:</span>
+          <span
+            className={`font-bold px-2 py-0.5 rounded font-mono ${
+              uncoveredAccess.length === 0
+                ? 'text-emerald-700 bg-emerald-50'
+                : 'text-amber-700 bg-amber-50'
+            }`}
+          >
+            {allAccessPoints.length - uncoveredAccess.length}/{allAccessPoints.length}
           </span>
         </div>
       </div>
 
-      {/* Main Workspace Area: Sidebar Palette + Canvas + Property Inspector */}
+      {/* Main Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left Toolbar / Palette (Cols 1-3) */}
+        {/* Left Toolbar / Library (Cols 1-3) */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Preset Chooser */}
+          {/* Preset Models */}
           <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2.5 shadow-xs">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
               <span>Modèles de Bâti Prédéfinis</span>
@@ -1018,14 +1592,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   setSelectedId(null);
                   showToast(
                     isRtl
-                      ? 'تم تحميل نموذج الفيلا السكنية (يمكن التراجع بـ Ctrl+Z)'
-                      : 'Modèle Villa Résidentielle (Oran) chargé (Ctrl+Z pour annuler).'
+                      ? 'تم تحميل نموذج الفيلا السكنية (Ctrl+Z للتراجع)'
+                      : 'Modèle Villa Résidentielle (Oran) chargé.'
                   );
                 }}
-                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors"
+                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors cursor-pointer"
               >
                 <div className="font-semibold text-slate-800">🏡 Villa Individuelle</div>
-                <div className="text-[11px] text-slate-500">4 Caméras, DVR, Alarme, Cour & Jardin</div>
+                <div className="text-[11px] text-slate-500">Portail motorisé, escalier, PTZ, cour, salon</div>
               </button>
               <button
                 onClick={() => {
@@ -1034,14 +1608,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   setSelectedId(null);
                   showToast(
                     isRtl
-                      ? 'تم تحميل نموذج المحل التجاري (يمكن التراجع بـ Ctrl+Z)'
-                      : 'Modèle Local Commercial chargé (Ctrl+Z pour annuler).'
+                      ? 'تم تحميل نموذج المحل التجاري (Ctrl+Z للتراجع)'
+                      : 'Modèle Local Commercial chargé.'
                   );
                 }}
-                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors"
+                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors cursor-pointer"
               >
                 <div className="font-semibold text-slate-800">🏪 Local Commercial / Supérette</div>
-                <div className="text-[11px] text-slate-500">Espace vente, caisse, réserve, 4 caméras</div>
+                <div className="text-[11px] text-slate-500">Portail livraison, escalier mezzanine, caisses</div>
               </button>
               <button
                 onClick={() => {
@@ -1050,11 +1624,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   setSelectedId(null);
                   showToast(
                     isRtl
-                      ? 'مخطط فارغ جديد جاهز (يمكن التراجع بـ Ctrl+Z)'
-                      : 'Nouveau plan vierge prêt (Ctrl+Z pour annuler).'
+                      ? 'مخطط فارغ جديد جاهز (Ctrl+Z للتراجع)'
+                      : 'Nouveau plan vierge prêt.'
                   );
                 }}
-                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-colors text-slate-600"
+                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-colors text-slate-600 cursor-pointer"
               >
                 <div className="font-semibold">✏️ Nouveau Plan Vierge</div>
                 <div className="text-[11px] text-slate-400">Dessinez votre bâti de zéro</div>
@@ -1062,17 +1636,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </div>
           </div>
 
-          {/* Drawing & Element Tools */}
+          {/* Tools Palette */}
           <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-3 shadow-xs">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Outils de Dessin & Équipements
+              Outils & Équipements
             </h3>
 
             <div className="space-y-1">
               {/* Select Tool */}
               <button
                 onClick={() => setActiveTool('select')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'select'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
@@ -1082,27 +1656,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <Move className="w-4 h-4 shrink-0" />
                   <span>Sélectionner / Déplacer</span>
                 </div>
-                <kbd className="text-[10px] bg-black/10 px-1.5 py-0.5 rounded font-mono">
-                  S
-                </kbd>
+                <span className="text-[10px] bg-black/10 px-1.5 py-0.5 rounded font-mono">
+                  Appui Long
+                </span>
               </button>
 
               {/* Eraser Tool */}
               <button
                 onClick={() => {
                   setActiveTool('eraser');
-                  showToast(
-                    isRtl
-                      ? 'أداة الممحاة مفعلة: اضغط على أي عنصر لمسحه فوراً'
-                      : 'Outil Gomme activé : Cliquez sur n’importe quel élément du plan pour l’effacer instantanément.'
-                  );
+                  showToast(isRtl ? 'أداة الممحاة مفعلة' : 'Outil Gomme activé : Cliquez pour effacer.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'eraser'
                     ? 'bg-rose-600 text-white font-semibold shadow-xs ring-2 ring-rose-400'
                     : 'text-rose-700 bg-rose-50/70 hover:bg-rose-100 border border-rose-200'
                 }`}
-                title="Supprimer facilement des éléments en cliquant dessus (Touche E)"
               >
                 <div className="flex items-center gap-2.5">
                   <Eraser className="w-4 h-4 shrink-0" />
@@ -1113,13 +1682,34 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 </span>
               </button>
 
+              {/* Measure Ruler Tool */}
+              <button
+                onClick={() => {
+                  setActiveTool('measure');
+                  showToast('Outil Mesure : Cliquez et glissez entre deux points pour mesurer.');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  activeTool === 'measure'
+                    ? 'bg-indigo-700 text-white font-semibold shadow-xs'
+                    : 'text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 border border-indigo-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Ruler className="w-4 h-4 shrink-0" />
+                  <span>Règle Métrique (Mesure)</span>
+                </div>
+                <span className="text-[10px] bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-mono">
+                  Mètres
+                </span>
+              </button>
+
               {/* Room (Square) */}
               <button
                 onClick={() => {
                   setActiveTool('room');
                   showToast('Mode Dessin : Cliquez et glissez sur le plan pour tracer une pièce.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'room'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
@@ -1127,10 +1717,52 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Box className="w-4 h-4 shrink-0 text-emerald-600" />
-                  <span>Tracer Pièce / Bâti</span>
+                  <span>Tracer Pièce / Mur</span>
                 </div>
                 <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                   Glisser
+                </span>
+              </button>
+
+              {/* Portal / Vehicle Gate (NEW) */}
+              <button
+                onClick={() => {
+                  setActiveTool('gate');
+                  showToast('Cliquez sur le plan pour poser un Portail Véhicules.');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  activeTool === 'gate'
+                    ? 'bg-emerald-700 text-white font-semibold shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Fence className="w-4 h-4 shrink-0 text-amber-800" />
+                  <span>Portail Véhicules (3.5m)</span>
+                </div>
+                <span className="text-[10px] bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-mono">
+                  Poser
+                </span>
+              </button>
+
+              {/* Stairs (NEW) */}
+              <button
+                onClick={() => {
+                  setActiveTool('stairs');
+                  showToast('Cliquez sur le plan pour poser un Escalier.');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  activeTool === 'stairs'
+                    ? 'bg-emerald-700 text-white font-semibold shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <ChevronRight className="w-4 h-4 shrink-0 text-slate-600 rotate-90" />
+                  <span>Escalier d'accès</span>
+                </div>
+                <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
+                  Poser
                 </span>
               </button>
 
@@ -1138,9 +1770,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <button
                 onClick={() => {
                   setActiveTool('door');
-                  showToast('Cliquez sur le plan pour déposer une porte.');
+                  showToast('Cliquez sur le plan pour poser une porte.');
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'door'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
@@ -1154,9 +1786,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <button
                 onClick={() => {
                   setActiveTool('window');
-                  showToast('Cliquez sur le plan pour déposer une fenêtre.');
+                  showToast('Cliquez sur le plan pour poser une fenêtre.');
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'window'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
@@ -1172,7 +1804,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   setActiveTool('emergency_exit');
                   showToast('Cliquez sur le plan pour ajouter une issue de secours.');
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'emergency_exit'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
@@ -1184,133 +1816,164 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Matériel Vidéosurveillance & Sécurité
-                </span>
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium">
-                  Glisser & Déposer
+                  Matériel CCTV & Sécurité
                 </span>
               </div>
 
-              {/* Bullet Camera (Click or Drag & Drop) */}
+              {/* Bullet Camera */}
               <button
-                draggable={true}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', 'camera_bullet');
-                  e.dataTransfer.effectAllowed = 'copy';
-                }}
                 onClick={() => {
                   setActiveTool('camera_bullet');
-                  showToast('Cliquez ou glissez sur le plan pour placer une Caméra Bullet (Tube).');
+                  showToast('Cliquez sur le plan pour poser une Caméra Bullet.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'camera_bullet'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
-                title="Cliquer pour placer ou glisser-déposer directement sur le plan"
               >
                 <div className="flex items-center gap-2.5">
                   <Video className="w-4 h-4 shrink-0 text-emerald-600" />
-                  <span>Caméra Bullet (Tube)</span>
+                  <span>Caméra Bullet (Tube Extérieur)</span>
                 </div>
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-mono">
-                  Glisser ⠿
+                  Poser
                 </span>
               </button>
 
-              {/* Dome Camera (Click or Drag & Drop) */}
+              {/* Dome Camera */}
               <button
-                draggable={true}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', 'camera_dome');
-                  e.dataTransfer.effectAllowed = 'copy';
-                }}
                 onClick={() => {
                   setActiveTool('camera_dome');
-                  showToast('Cliquez ou glissez sur le plan pour placer une Caméra Dôme.');
+                  showToast('Cliquez sur le plan pour poser une Caméra Dôme.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'camera_dome'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
-                title="Cliquer pour placer ou glisser-déposer directement sur le plan"
               >
                 <div className="flex items-center gap-2.5">
                   <Video className="w-4 h-4 shrink-0 text-cyan-600" />
-                  <span>Caméra Dôme (Plafond)</span>
+                  <span>Caméra Dôme (Plafond Intérieur)</span>
                 </div>
                 <span className="text-[10px] bg-cyan-50 text-cyan-700 px-1.5 py-0.5 rounded font-mono">
-                  Glisser ⠿
+                  Poser
                 </span>
               </button>
 
-              {/* DVR Unit (Click or Drag & Drop) */}
+              {/* PTZ 360 Camera (NEW) */}
               <button
-                draggable={true}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', 'dvr');
-                  e.dataTransfer.effectAllowed = 'copy';
+                onClick={() => {
+                  setActiveTool('camera_ptz');
+                  showToast('Cliquez sur le plan pour poser une Caméra PTZ 360° motorisée.');
                 }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  activeTool === 'camera_ptz'
+                    ? 'bg-purple-700 text-white font-semibold shadow-xs'
+                    : 'text-purple-800 bg-purple-50/70 hover:bg-purple-100 border border-purple-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Video className="w-4 h-4 shrink-0 text-purple-600" />
+                  <span>Caméra PTZ 360° (Motorisée)</span>
+                </div>
+                <span className="text-[10px] bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded font-mono">
+                  360°
+                </span>
+              </button>
+
+              {/* DVR Unit */}
+              <button
                 onClick={() => {
                   setActiveTool('dvr');
-                  showToast('Cliquez ou glissez sur le plan pour placer l’enregistreur DVR/NVR.');
+                  showToast('Cliquez sur le plan pour placer l’enregistreur DVR/NVR.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'dvr'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
-                title="Cliquer pour placer ou glisser-déposer directement sur le plan"
               >
                 <div className="flex items-center gap-2.5">
                   <Server className="w-4 h-4 shrink-0 text-indigo-600" />
                   <span>Enregistreur NVR / DVR</span>
                 </div>
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono">
-                  Glisser ⠿
+                  Poser
                 </span>
               </button>
 
-              {/* Alarm Siren (Click or Drag & Drop) */}
+              {/* Monitor Screen (NEW) */}
               <button
-                draggable={true}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', 'alarm_siren');
-                  e.dataTransfer.effectAllowed = 'copy';
+                onClick={() => {
+                  setActiveTool('monitor_screen');
+                  showToast('Cliquez sur le plan pour placer un Moniteur de Surveillance.');
                 }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  activeTool === 'monitor_screen'
+                    ? 'bg-emerald-700 text-white font-semibold shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Monitor className="w-4 h-4 shrink-0 text-sky-600" />
+                  <span>Moniteur Écran Vidéo</span>
+                </div>
+                <span className="text-[10px] bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-mono">
+                  Poser
+                </span>
+              </button>
+
+              {/* PIR Detector (NEW) */}
+              <button
+                onClick={() => {
+                  setActiveTool('pir_sensor');
+                  showToast('Cliquez sur le plan pour placer un détecteur PIR volumétrique.');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  activeTool === 'pir_sensor'
+                    ? 'bg-emerald-700 text-white font-semibold shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Radio className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>Détecteur Mouvement PIR</span>
+                </div>
+                <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-mono">
+                  Poser
+                </span>
+              </button>
+
+              {/* Alarm Siren */}
+              <button
                 onClick={() => {
                   setActiveTool('alarm_siren');
-                  showToast('Cliquez ou glissez sur le plan pour placer la sirène d’alarme.');
+                  showToast('Cliquez sur le plan pour placer la sirène d’alarme.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'alarm_siren'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
-                title="Cliquer pour placer ou glisser-déposer directement sur le plan"
               >
                 <div className="flex items-center gap-2.5">
                   <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
-                  <span>Sirène & Centrale Alarme</span>
+                  <span>Sirène & Flash Alarme</span>
                 </div>
                 <span className="text-[10px] bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded font-mono">
-                  Glisser ⠿
+                  Poser
                 </span>
               </button>
 
               {/* Text Annotation */}
               <button
-                draggable={true}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', 'text');
-                  e.dataTransfer.effectAllowed = 'copy';
-                }}
                 onClick={() => {
                   setActiveTool('text');
                   showToast('Cliquez sur le plan pour insérer une annotation textuelle.');
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-grab ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeTool === 'text'
                     ? 'bg-emerald-700 text-white font-semibold shadow-xs'
                     : 'text-slate-700 hover:bg-slate-100'
@@ -1321,7 +1984,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <span>Texte / Annotation</span>
                 </div>
                 <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
-                  Glisser ⠿
+                  Poser
                 </span>
               </button>
             </div>
@@ -1329,33 +1992,63 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         </div>
 
         {/* Center Canvas Area (Cols 4-9) */}
-        <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col min-h-[580px]">
-          {/* Canvas Mode Header with Undo, Redo, and Eraser Controls */}
+        <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col min-h-[600px]">
+          {/* Canvas Mode Header */}
           <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-slate-800">
-                {viewMode === '2d' ? 'Éditeur Architectural 2D' : 'Rendu 3D Temps Réel Three.js'}
+                {viewMode === '2d' ? 'Éditeur Architectural 2D' : 'Rendu 3D Isométrique Three.js'}
               </span>
               <span className="text-slate-400">·</span>
               <span className="text-slate-500 hidden sm:inline">
-                Grille métrique : 1m | Échelle : 1:100
+                Grille : 1m | Snap : {gridSnapOn ? '0.25m' : 'Libre'}
               </span>
             </div>
 
-            {/* Quick Actions Bar: Undo, Redo, Gomme, Rotate, Delete */}
+            {/* Quick Actions Bar */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Undo Button */}
+              <div className="flex items-center bg-white border border-slate-200 rounded-md p-0.5">
+                <button
+                  onClick={() => setZoomLevel((z) => Math.max(0.6, Math.round((z - 0.15) * 100) / 100))}
+                  className="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"
+                  title="Zoom arrière (-)"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-1 text-[10px] font-mono font-semibold text-slate-700">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <button
+                  onClick={() => setZoomLevel((z) => Math.min(2.0, Math.round((z + 0.15) * 100) / 100))}
+                  className="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"
+                  title="Zoom avant (+)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowFovCones((v) => !v)}
+                className={`p-1.5 rounded-md text-xs border cursor-pointer transition-colors ${
+                  showFovCones
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
+                    : 'bg-white text-slate-500 border-slate-200'
+                }`}
+                title="Afficher/Masquer les cônes de vision"
+              >
+                <Eye className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="h-4 w-px bg-slate-300 mx-0.5" />
+
               <button
                 onClick={handleUndo}
                 disabled={undoStack.length === 0}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 disabled:opacity-35 disabled:hover:bg-white border border-slate-200 transition-colors shadow-2xs cursor-pointer"
-                title={isRtl ? 'تراجع عن آخر تعديل (Ctrl+Z)' : 'Annuler la dernière action (Ctrl+Z)'}
+                title="Annuler (Ctrl+Z)"
               >
                 <Undo2 className="w-3.5 h-3.5 text-slate-700" />
-                <span className="hidden sm:inline">{isRtl ? 'تراجع' : 'Annuler'}</span>
-                <kbd className="hidden md:inline px-1 py-0.2 bg-slate-100 border border-slate-300 rounded text-[9px] text-slate-500 font-mono">
-                  Ctrl+Z
-                </kbd>
+                <span className="hidden sm:inline">Annuler</span>
                 {undoStack.length > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[10px] rounded-full font-bold">
                     {undoStack.length}
@@ -1363,23 +2056,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 )}
               </button>
 
-              {/* Redo Button */}
               <button
                 onClick={handleRedo}
                 disabled={redoStack.length === 0}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 disabled:opacity-35 disabled:hover:bg-white border border-slate-200 transition-colors shadow-2xs cursor-pointer"
-                title={isRtl ? 'استعادة التعديل الملغى (Ctrl+Y)' : 'Rétablir l’action annulée (Ctrl+Y)'}
+                title="Rétablir (Ctrl+Y)"
               >
                 <Redo2 className="w-3.5 h-3.5 text-slate-700" />
-                <span className="hidden sm:inline">{isRtl ? 'استعادة' : 'Rétablir'}</span>
-                <kbd className="hidden md:inline px-1 py-0.2 bg-slate-100 border border-slate-300 rounded text-[9px] text-slate-500 font-mono">
-                  Ctrl+Y
-                </kbd>
+                <span className="hidden sm:inline">Rétablir</span>
               </button>
 
-              <div className="h-4 w-px bg-slate-300 mx-0.5" />
-
-              {/* Eraser Quick Toggle */}
               <button
                 onClick={() => setActiveTool((curr) => (curr === 'eraser' ? 'select' : 'eraser'))}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
@@ -1387,28 +2073,25 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     ? 'bg-rose-600 text-white border-rose-700 shadow-2xs font-semibold ring-1 ring-rose-400'
                     : 'bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-700 border-slate-200'
                 }`}
-                title={isRtl ? 'أداة الممحاة (E)' : 'Activer l’outil Gomme pour effacer en 1 clic (Touche E)'}
+                title="Outil Gomme (E)"
               >
                 <Eraser className="w-3.5 h-3.5" />
-                <span>{isRtl ? 'ممحاة' : 'Gomme'}</span>
-                <kbd className="hidden md:inline px-1 py-0.2 bg-black/10 rounded text-[9px] font-mono">
-                  E
-                </kbd>
+                <span>Gomme</span>
               </button>
 
               {selectedId && (
                 <>
                   <button
                     onClick={() => handleRotateSelected(45)}
-                    className="p-1 hover:bg-slate-200 rounded text-slate-700 transition-colors"
-                    title="Pivoter de 45° vers la droite"
+                    className="p-1 hover:bg-slate-200 rounded text-slate-700 transition-colors cursor-pointer"
+                    title="Pivoter 45°"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={handleDeleteSelected}
-                    className="p-1 hover:bg-rose-100 rounded text-rose-600 transition-colors"
-                    title="Supprimer l'élément sélectionné (Suppr / Backspace)"
+                    className="p-1 hover:bg-rose-100 rounded text-rose-600 transition-colors cursor-pointer"
+                    title="Supprimer (Suppr)"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1417,22 +2100,33 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </div>
           </div>
 
+          {/* Long Press Interaction Reminder Tip */}
+          <div className="px-3 py-1 bg-emerald-50/60 border-b border-emerald-100 flex items-center justify-between text-[11px] text-emerald-900">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Info className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span>
+                <strong>Déplacement :</strong> Maintenez appuyé (0.3s) sur un élément puis glissez. Clic simple = sélectionner.
+              </span>
+            </span>
+            <span className="text-emerald-700 font-mono text-[10px] hidden md:inline">
+              Portails & Escaliers actifs
+            </span>
+          </div>
+
           {/* Active Eraser Banner */}
           {activeTool === 'eraser' && (
             <div className="px-3 py-1.5 bg-rose-50 border-b border-rose-200 flex items-center justify-between text-xs text-rose-800 animate-fade-in">
               <span className="flex items-center gap-2 font-medium">
                 <Eraser className="w-4 h-4 text-rose-600 animate-pulse shrink-0" />
                 <span>
-                  {isRtl
-                    ? 'وضع الممحاة نشط: انقر فوق أي غرفة، باب، نافذة أو كاميرا لمسحها فوراً (يمكن التراجع بـ Ctrl+Z).'
-                    : 'Mode Gomme actif : Cliquez sur une pièce, porte, fenêtre ou caméra pour l’effacer instantanément (Ctrl+Z pour annuler).'}
+                  Mode Gomme actif : Cliquez sur n'importe quel élément pour l'effacer immédiatement.
                 </span>
               </span>
               <button
                 onClick={() => setActiveTool('select')}
                 className="underline text-[11px] font-semibold text-rose-900 hover:text-rose-950 cursor-pointer ml-2 whitespace-nowrap"
               >
-                {isRtl ? 'إيقاف الممحاة (S)' : 'Quitter la gomme (S)'}
+                Quitter la gomme
               </button>
             </div>
           )}
@@ -1449,11 +2143,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   onMouseMove={handleSvgMouseMove}
                   onMouseUp={handleSvgMouseUp}
                   onTouchStart={(e) => {
-                    if (longPressMenu) setLongPressMenu(null);
                     const coords = getCanvasCoords(e);
-                    if (e.touches.length > 0) {
-                      startLongPressTimer(e.touches[0].clientX, e.touches[0].clientY, coords);
-                    }
                     if (activeTool === 'room') {
                       setIsDrawingRoom(true);
                       setDrawStart(coords);
@@ -1462,29 +2152,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   }}
                   onTouchMove={(e) => handleSvgMouseMove(e as any)}
                   onTouchEnd={() => handleSvgMouseUp()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'copy';
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const tool = e.dataTransfer.getData('text/plain') as ToolType;
-                    if (tool) {
-                      const coords = getCanvasCoords(e as any);
-                      createDeviceOrElementAtCoords(tool, coords.x, coords.y);
-                    }
-                  }}
                   className={`select-none block touch-none ${
                     isDraggingElement
                       ? 'cursor-grabbing'
                       : activeTool === 'eraser'
                       ? 'cursor-crosshair'
-                      : activeTool === 'room'
+                      : activeTool === 'room' || activeTool === 'measure'
                       ? 'cursor-crosshair'
                       : 'cursor-default'
                   }`}
                 >
-                  {/* Metric Grid Pattern */}
                   <defs>
                     <pattern id="smallGrid" width={SCALE / 2} height={SCALE / 2} patternUnits="userSpaceOnUse">
                       <path d={`M ${SCALE / 2} 0 L 0 0 0 ${SCALE / 2}`} fill="none" stroke="#f1f5f9" strokeWidth="1" />
@@ -1496,33 +2173,34 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </defs>
                   <rect width="100%" height="100%" fill="url(#grid)" />
 
-                  {/* 1. Draw Rooms / Bâti */}
+                  {/* 1. Rooms */}
                   {plan.rooms.map((room) => {
                     const isSelected = selectedId === room.id;
+                    const isBeingDragged = isDraggingElement && draggingId === room.id;
+                    const isPending = pendingLongPress?.id === room.id;
                     const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === room.id;
+
                     return (
                       <g
                         key={room.id}
-                        onMouseDown={(e) =>
-                          handleElementMouseDown(e, room.id, 'room', room.x, room.y)
-                        }
+                        onMouseDown={(e) => handleElementPressStart(e, room.id, 'room', room.x, room.y)}
+                        onTouchStart={(e) => handleElementPressStart(e, room.id, 'room', room.x, room.y)}
                         onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(room.id)}
                         onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
                         className="cursor-pointer"
                       >
-                        {/* Floor Slab */}
                         <rect
                           x={room.x * SCALE}
                           y={room.y * SCALE}
                           width={room.width * SCALE}
                           height={room.height * SCALE}
                           fill={isEraseHovered ? '#fee2e2' : room.color || '#f8fafc'}
-                          stroke={isEraseHovered ? '#ef4444' : isSelected ? '#047857' : '#0f172a'}
-                          strokeWidth={isEraseHovered ? 3.5 : isSelected ? 3 : 2}
-                          strokeDasharray={isEraseHovered ? '6 3' : undefined}
+                          stroke={isEraseHovered ? '#ef4444' : isSelected ? '#047857' : isPending ? '#059669' : '#0f172a'}
+                          strokeWidth={isEraseHovered ? 3.5 : isSelected ? 3 : isPending ? 3 : 2}
+                          strokeDasharray={isPending ? '4 2' : isEraseHovered ? '6 3' : undefined}
                           rx={3}
+                          className={isBeingDragged ? 'filter drop-shadow-md' : ''}
                         />
-                        {/* Room Label */}
                         <text
                           x={room.x * SCALE + 8}
                           y={room.y * SCALE + 20}
@@ -1546,16 +2224,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                             {room.nameAr}
                           </text>
                         )}
-                        {/* Dimension Badge */}
-                        <text
-                          x={room.x * SCALE + room.width * SCALE - 60}
-                          y={room.y * SCALE + room.height * SCALE - 8}
-                          fontSize="10"
-                          fill="#94a3b8"
-                          className="pointer-events-none font-mono"
-                        >
-                          {room.width}m × {room.height}m
-                        </text>
+                        {showDimensions && (
+                          <text
+                            x={room.x * SCALE + room.width * SCALE - 64}
+                            y={room.y * SCALE + room.height * SCALE - 8}
+                            fontSize="10"
+                            fill="#94a3b8"
+                            className="pointer-events-none font-mono"
+                          >
+                            {room.width}m × {room.height}m
+                          </text>
+                        )}
                       </g>
                     );
                   })}
@@ -1574,19 +2253,149 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     />
                   )}
 
-                  {/* 2. Draw Windows */}
+                  {/* 2. Stairs (NEW) */}
+                  {(plan.stairs || []).map((stair) => {
+                    const isSelected = selectedId === stair.id;
+                    const isPending = pendingLongPress?.id === stair.id;
+                    const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === stair.id;
+                    const sx = stair.x * SCALE;
+                    const sy = stair.y * SCALE;
+                    const sWidth = stair.width * SCALE;
+                    const sLength = stair.length * SCALE;
+                    const stepCount = stair.steps || 12;
+                    const stepH = sLength / stepCount;
+
+                    return (
+                      <g
+                        key={stair.id}
+                        onMouseDown={(e) => handleElementPressStart(e, stair.id, 'stairs', stair.x, stair.y)}
+                        onTouchStart={(e) => handleElementPressStart(e, stair.id, 'stairs', stair.x, stair.y)}
+                        onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(stair.id)}
+                        onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
+                        className="cursor-pointer"
+                        transform={`rotate(${stair.angle}, ${sx + sWidth / 2}, ${sy + sLength / 2})`}
+                      >
+                        {/* Stair Base Box */}
+                        <rect
+                          x={sx}
+                          y={sy}
+                          width={sWidth}
+                          height={sLength}
+                          fill={isEraseHovered ? '#fee2e2' : '#f1f5f9'}
+                          stroke={isEraseHovered ? '#ef4444' : isSelected ? '#047857' : isPending ? '#059669' : '#334155'}
+                          strokeWidth={isSelected ? 3 : 2}
+                          rx={2}
+                        />
+                        {/* Stair Step Lines */}
+                        {Array.from({ length: stepCount - 1 }).map((_, idx) => (
+                          <line
+                            key={idx}
+                            x1={sx}
+                            y1={sy + (idx + 1) * stepH}
+                            x2={sx + sWidth}
+                            y2={sy + (idx + 1) * stepH}
+                            stroke="#64748b"
+                            strokeWidth={1}
+                          />
+                        ))}
+                        {/* Direction Arrow */}
+                        <line
+                          x1={sx + sWidth / 2}
+                          y1={sy + sLength - 6}
+                          x2={sx + sWidth / 2}
+                          y2={sy + 8}
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          markerEnd="url(#arrow)"
+                        />
+                        <text
+                          x={sx + sWidth / 2}
+                          y={sy + sLength / 2 + 4}
+                          fontSize="9"
+                          fontWeight="bold"
+                          fill="#0f172a"
+                          textAnchor="middle"
+                          className="pointer-events-none select-none"
+                        >
+                          {stair.direction === 'up' ? 'MONTÉE ↗' : 'DESCENTE ↘'}
+                        </text>
+                        <text
+                          x={sx + 4}
+                          y={sy - 4}
+                          fontSize="9"
+                          fontWeight="bold"
+                          fill="#334155"
+                          className="pointer-events-none select-none"
+                        >
+                          {stair.label || 'Escalier'} ({stair.steps} marches)
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* 3. Vehicle Gates (NEW) */}
+                  {(plan.gates || []).map((gate) => {
+                    const isSelected = selectedId === gate.id;
+                    const isPending = pendingLongPress?.id === gate.id;
+                    const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === gate.id;
+                    const gx = gate.x * SCALE;
+                    const gy = gate.y * SCALE;
+                    const gWidth = gate.width * SCALE;
+
+                    return (
+                      <g
+                        key={gate.id}
+                        onMouseDown={(e) => handleElementPressStart(e, gate.id, 'gate', gate.x, gate.y)}
+                        onTouchStart={(e) => handleElementPressStart(e, gate.id, 'gate', gate.x, gate.y)}
+                        onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(gate.id)}
+                        onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
+                        className="cursor-pointer"
+                        transform={`rotate(${gate.angle}, ${gx + gWidth / 2}, ${gy})`}
+                      >
+                        {/* Left & Right Gate Pillars */}
+                        <rect x={gx - 8} y={gy - 8} width={16} height={16} fill="#0f172a" stroke="#ffffff" strokeWidth={1.5} rx={2} />
+                        <rect x={gx + gWidth - 8} y={gy - 8} width={16} height={16} fill="#0f172a" stroke="#ffffff" strokeWidth={1.5} rx={2} />
+
+                        {/* Heavy Gate Crossbeam */}
+                        <line
+                          x1={gx}
+                          y1={gy}
+                          x2={gx + gWidth}
+                          y2={gy}
+                          stroke={isEraseHovered ? '#ef4444' : isSelected ? '#047857' : '#1e293b'}
+                          strokeWidth={isSelected ? 6 : 5}
+                          strokeDasharray={gate.isMotorized ? '6 3' : undefined}
+                        />
+
+                        {/* Motorized Tag */}
+                        <text
+                          x={gx + gWidth / 2}
+                          y={gy - 12}
+                          fontSize="10"
+                          fontWeight="bold"
+                          fill="#0f172a"
+                          textAnchor="middle"
+                          className="pointer-events-none select-none font-sans"
+                        >
+                          🚗 {gate.label || 'Portail Véhicules'} {gate.isMotorized ? '(Motorisé)' : ''}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* 4. Windows */}
                   {plan.windows.map((win) => {
                     const isSelected = selectedId === win.id;
                     const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === win.id;
                     const wx = win.x * SCALE;
                     const wy = win.y * SCALE;
                     const wWidth = win.width * SCALE;
+
                     return (
                       <g
                         key={win.id}
-                        onMouseDown={(e) =>
-                          handleElementMouseDown(e, win.id, 'window', win.x, win.y)
-                        }
+                        onMouseDown={(e) => handleElementPressStart(e, win.id, 'window', win.x, win.y)}
+                        onTouchStart={(e) => handleElementPressStart(e, win.id, 'window', win.x, win.y)}
                         onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(win.id)}
                         onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
                         className="cursor-pointer"
@@ -1598,8 +2407,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                           height={8}
                           fill={isEraseHovered ? '#fca5a5' : '#bae6fd'}
                           stroke={isEraseHovered ? '#ef4444' : isSelected ? '#0284c7' : '#0369a1'}
-                          strokeWidth={isEraseHovered ? 2.5 : isSelected ? 2 : 1}
-                          strokeDasharray={isEraseHovered ? '4 2' : undefined}
+                          strokeWidth={isEraseHovered ? 2.5 : isSelected ? 2.5 : 1}
                           rx={2}
                           transform={`rotate(${win.angle}, ${wx}, ${wy})`}
                         />
@@ -1607,24 +2415,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     );
                   })}
 
-                  {/* 3. Draw Doors & Emergency Exits */}
+                  {/* 5. Doors & Emergency Exits */}
                   {plan.doors.map((door) => {
                     const isSelected = selectedId === door.id;
                     const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === door.id;
                     const dx = door.x * SCALE;
                     const dy = door.y * SCALE;
                     const dWidth = door.width * SCALE;
+
                     return (
                       <g
                         key={door.id}
-                        onMouseDown={(e) =>
-                          handleElementMouseDown(e, door.id, 'door', door.x, door.y)
-                        }
+                        onMouseDown={(e) => handleElementPressStart(e, door.id, 'door', door.x, door.y)}
+                        onTouchStart={(e) => handleElementPressStart(e, door.id, 'door', door.x, door.y)}
                         onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(door.id)}
                         onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
                         className="cursor-pointer"
                       >
-                        {/* Door swing arc */}
                         <path
                           d={`M ${dx} ${dy} A ${dWidth} ${dWidth} 0 0 1 ${dx + dWidth} ${dy}`}
                           fill="none"
@@ -1633,7 +2440,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                           strokeDasharray="3 3"
                           transform={`rotate(${door.angle}, ${dx}, ${dy})`}
                         />
-                        {/* Door Leaf */}
                         <line
                           x1={dx}
                           y1={dy}
@@ -1643,140 +2449,148 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                           strokeWidth={isEraseHovered ? 5 : isSelected ? 4 : 3}
                           transform={`rotate(${door.angle}, ${dx}, ${dy})`}
                         />
-                        {/* Door Label Badge */}
                         <text
                           x={dx + 4}
                           y={dy - 6}
-                          fontSize="9"
-                          fontWeight="600"
-                          fill={isEraseHovered ? '#ef4444' : door.isEmergencyExit ? '#16a34a' : '#475569'}
+                          fontSize="9.5"
+                          fontWeight="700"
+                          fill={door.isEmergencyExit ? '#16a34a' : '#78350f'}
+                          className="pointer-events-none select-none font-sans"
                         >
-                          {isEraseHovered ? '✖ EFFACER' : door.isEmergencyExit ? '🚪 ISSUE DE SECOURS' : 'PORTE'}
+                          {door.isEmergencyExit ? '🚨 ISSUE DE SECOURS' : door.label || 'PORTE'}
                         </text>
                       </g>
                     );
                   })}
 
-                  {/* 4. Draw Security Devices (Cameras with Vision Cones, DVR, Alarm) */}
+                  {/* 6. Security Devices (Cameras, PTZ, DVR, Monitor, Siren, PIR) */}
                   {plan.devices.map((dev) => {
                     const isSelected = selectedId === dev.id;
+                    const isBeingDragged = isDraggingElement && draggingId === dev.id;
+                    const isPending = pendingLongPress?.id === dev.id;
                     const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === dev.id;
+
                     const cx = dev.x * SCALE;
                     const cy = dev.y * SCALE;
 
-                    if (dev.type === 'camera_bullet' || dev.type === 'camera_dome') {
+                    if (
+                      dev.type === 'camera_bullet' ||
+                      dev.type === 'camera_dome' ||
+                      dev.type === 'camera_ptz'
+                    ) {
                       const angleRad = (dev.rotation * Math.PI) / 180;
                       const halfFov = ((dev.fovAngle || 80) * Math.PI) / 360;
                       const rangePx = (dev.range || 10) * SCALE;
+
                       const startAngle = angleRad - halfFov;
                       const endAngle = angleRad + halfFov;
 
-                      const x1 = cx + rangePx * Math.cos(startAngle);
-                      const y1 = cy + rangePx * Math.sin(startAngle);
-                      const x2 = cx + rangePx * Math.cos(endAngle);
-                      const y2 = cy + rangePx * Math.sin(endAngle);
+                      const x1 = cx + Math.cos(startAngle) * rangePx;
+                      const y1 = cy + Math.sin(startAngle) * rangePx;
+                      const x2 = cx + Math.cos(endAngle) * rangePx;
+                      const y2 = cy + Math.sin(endAngle) * rangePx;
 
-                      const conePath = `M ${cx} ${cy} L ${x1} ${y1} A ${rangePx} ${rangePx} 0 0 1 ${x2} ${y2} Z`;
+                      const largeArc = dev.fovAngle > 180 ? 1 : 0;
+                      const conePath =
+                        dev.type === 'camera_ptz'
+                          ? `M ${cx - rangePx} ${cy} A ${rangePx} ${rangePx} 0 1 0 ${cx + rangePx} ${cy} A ${rangePx} ${rangePx} 0 1 0 ${cx - rangePx} ${cy}`
+                          : `M ${cx} ${cy} L ${x1} ${y1} A ${rangePx} ${rangePx} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 
                       return (
                         <g
                           key={dev.id}
-                          onMouseDown={(e) =>
-                            handleElementMouseDown(e, dev.id, 'device', dev.x, dev.y)
-                          }
-                          onTouchStart={(e) =>
-                            handleElementMouseDown(e, dev.id, 'device', dev.x, dev.y)
-                          }
+                          onMouseDown={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onTouchStart={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
                           onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(dev.id)}
                           onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
-                          className={
-                            activeTool === 'eraser'
-                              ? 'cursor-pointer'
-                              : 'cursor-grab active:cursor-grabbing'
-                          }
+                          className={isBeingDragged ? 'cursor-grabbing' : 'cursor-pointer'}
                         >
-                          {/* FOV Vision Cone */}
-                          <path
-                            d={conePath}
-                            fill={
-                              isEraseHovered
-                                ? 'rgba(239, 68, 68, 0.25)'
-                                : dev.isOutdoor
-                                ? 'rgba(16, 185, 129, 0.18)'
-                                : 'rgba(56, 189, 248, 0.18)'
-                            }
-                            stroke={isEraseHovered ? '#ef4444' : dev.isOutdoor ? '#10b981' : '#38bdf8'}
-                            strokeWidth={isEraseHovered ? 2 : 1.5}
-                            strokeDasharray={isEraseHovered ? '3 3' : '4 2'}
-                          />
+                          {showFovCones && (
+                            <path
+                              d={conePath}
+                              fill={
+                                isEraseHovered
+                                  ? 'rgba(239, 68, 68, 0.25)'
+                                  : dev.type === 'camera_ptz'
+                                  ? 'rgba(168, 85, 247, 0.18)'
+                                  : dev.isOutdoor
+                                  ? 'rgba(16, 185, 129, 0.22)'
+                                  : 'rgba(56, 189, 248, 0.22)'
+                              }
+                              stroke={
+                                isEraseHovered
+                                  ? '#ef4444'
+                                  : dev.type === 'camera_ptz'
+                                  ? '#9333ea'
+                                  : dev.isOutdoor
+                                  ? '#059669'
+                                  : '#0284c7'
+                              }
+                              strokeWidth={isSelected ? 1.8 : 1}
+                              strokeDasharray={isSelected ? '4 2' : undefined}
+                              className="pointer-events-none"
+                            />
+                          )}
 
-                          {/* Camera Icon Body */}
+                          {isPending && (
+                            <circle cx={cx} cy={cy} r={22} fill="none" stroke="#10b981" strokeWidth={2.5} className="animate-ping" />
+                          )}
+
                           <circle
                             cx={cx}
                             cy={cy}
-                            r={isEraseHovered ? 12 : 10}
-                            fill={isEraseHovered ? '#ef4444' : isSelected ? '#059669' : '#0f172a'}
+                            r={dev.type === 'camera_ptz' ? 14 : dev.type === 'camera_bullet' ? 12 : 11}
+                            fill={
+                              isEraseHovered
+                                ? '#ef4444'
+                                : isSelected
+                                ? '#047857'
+                                : dev.type === 'camera_ptz'
+                                ? '#9333ea'
+                                : dev.isOutdoor
+                                ? '#059669'
+                                : '#0284c7'
+                            }
                             stroke="#ffffff"
-                            strokeWidth={2}
+                            strokeWidth={2.5}
+                            className={isBeingDragged ? 'filter drop-shadow-lg' : ''}
                           />
 
-                          {/* Direction Indicator Arrow */}
-                          <line
-                            x1={cx}
-                            y1={cy}
-                            x2={cx + 14 * Math.cos(angleRad)}
-                            y2={cy + 14 * Math.sin(angleRad)}
-                            stroke={isEraseHovered ? '#fca5a5' : isSelected ? '#34d399' : '#38bdf8'}
-                            strokeWidth={3}
-                            strokeLinecap="round"
-                          />
+                          {dev.type !== 'camera_ptz' && (
+                            <line
+                              x1={cx}
+                              y1={cy}
+                              x2={cx + Math.cos(angleRad) * 16}
+                              y2={cy + Math.sin(angleRad) * 16}
+                              stroke="#ffffff"
+                              strokeWidth={3}
+                              strokeLinecap="round"
+                            />
+                          )}
 
-                          {/* Live coordinate feedback while dragging */}
-                          {isSelected && isDraggingElement && (
+                          <text
+                            x={cx}
+                            y={cy + 3.5}
+                            fontSize="9"
+                            fontWeight="bold"
+                            fill="#ffffff"
+                            textAnchor="middle"
+                            className="pointer-events-none select-none font-mono"
+                          >
+                            {dev.type === 'camera_ptz' ? '360°' : dev.channel || '●'}
+                          </text>
+
+                          {isBeingDragged && (
                             <g transform={`translate(${cx}, ${cy - 24})`}>
-                              <rect
-                                x="-44"
-                                y="-14"
-                                width="88"
-                                height="18"
-                                rx="9"
-                                fill="#0f172a"
-                                stroke="#10b981"
-                                strokeWidth="1.5"
-                              />
-                              <text
-                                x="0"
-                                y="-2"
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                fontSize="9.5"
-                                fontFamily="monospace"
-                                fontWeight="700"
-                              >
+                              <rect x="-48" y="-14" width="96" height="18" rx="9" fill="#0f172a" stroke="#10b981" strokeWidth="1.5" />
+                              <text x="0" y="-2" textAnchor="middle" fill="#ffffff" fontSize="9.5" fontFamily="monospace" fontWeight="700">
                                 {dev.x.toFixed(2)}m · {dev.y.toFixed(2)}m
                               </text>
                             </g>
                           )}
 
-                          {/* Device Text Label */}
-                          <text
-                            x={cx + 14}
-                            y={cy - 4}
-                            fontSize="11"
-                            fontWeight="700"
-                            fill={isEraseHovered ? '#b91c1c' : '#0f172a'}
-                            className="bg-white/90"
-                          >
-                            {dev.label} {isEraseHovered && '✖'}
-                          </text>
-                          <text
-                            x={cx + 14}
-                            y={cy + 10}
-                            fontSize="9.5"
-                            fontWeight="500"
-                            fill={isEraseHovered ? '#ef4444' : '#64748b'}
-                          >
-                            {isEraseHovered ? 'Cliquer pour effacer' : `${dev.modelName} (${dev.resolution})`}
+                          <text x={cx + 16} y={cy + 4} fontSize="10.5" fontWeight="700" fill={isEraseHovered ? '#ef4444' : '#0f172a'} className="pointer-events-none select-none">
+                            {dev.label}
                           </text>
                         </g>
                       );
@@ -1784,19 +2598,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       return (
                         <g
                           key={dev.id}
-                          onMouseDown={(e) =>
-                            handleElementMouseDown(e, dev.id, 'device', dev.x, dev.y)
-                          }
-                          onTouchStart={(e) =>
-                            handleElementMouseDown(e, dev.id, 'device', dev.x, dev.y)
-                          }
+                          onMouseDown={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onTouchStart={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
                           onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(dev.id)}
                           onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
-                          className={
-                            activeTool === 'eraser'
-                              ? 'cursor-pointer'
-                              : 'cursor-grab active:cursor-grabbing'
-                          }
+                          className={isBeingDragged ? 'cursor-grabbing' : 'cursor-pointer'}
                         >
                           <rect
                             x={cx - 16}
@@ -1807,50 +2613,49 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                             stroke={isEraseHovered ? '#b91c1c' : '#10b981'}
                             strokeWidth={2}
                             rx={3}
+                            className={isBeingDragged ? 'filter drop-shadow-lg' : ''}
                           />
-                          <text
-                            x={cx}
-                            y={cy + 3}
-                            fontSize="9"
-                            fontWeight="bold"
-                            fill="#ffffff"
-                            textAnchor="middle"
-                          >
+                          <text x={cx} y={cy + 3} fontSize="9" fontWeight="bold" fill="#ffffff" textAnchor="middle">
                             {isEraseHovered ? '✖' : 'DVR'}
                           </text>
-                          {isSelected && isDraggingElement && (
-                            <g transform={`translate(${cx}, ${cy - 24})`}>
-                              <rect
-                                x="-44"
-                                y="-14"
-                                width="88"
-                                height="18"
-                                rx="9"
-                                fill="#0f172a"
-                                stroke="#10b981"
-                                strokeWidth="1.5"
-                              />
-                              <text
-                                x="0"
-                                y="-2"
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                fontSize="9.5"
-                                fontFamily="monospace"
-                                fontWeight="700"
-                              >
-                                {dev.x.toFixed(2)}m · {dev.y.toFixed(2)}m
-                              </text>
-                            </g>
-                          )}
-                          <text
-                            x={cx + 20}
-                            y={cy + 4}
-                            fontSize="11"
-                            fontWeight="700"
-                            fill={isEraseHovered ? '#ef4444' : '#047857'}
-                          >
-                            {dev.label} {isEraseHovered && '(Effacer)'}
+                          <text x={cx + 20} y={cy + 4} fontSize="11" fontWeight="700" fill={isEraseHovered ? '#ef4444' : '#047857'}>
+                            {dev.label}
+                          </text>
+                        </g>
+                      );
+                    } else if (dev.type === 'monitor_screen') {
+                      return (
+                        <g
+                          key={dev.id}
+                          onMouseDown={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onTouchStart={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(dev.id)}
+                          onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
+                          className={isBeingDragged ? 'cursor-grabbing' : 'cursor-pointer'}
+                        >
+                          <rect x={cx - 14} y={cy - 10} width={28} height={20} fill="#1e293b" stroke="#38bdf8" strokeWidth={1.5} rx={2} />
+                          <rect x={cx - 11} y={cy - 8} width={22} height={14} fill="#0284c7" />
+                          <line x1={cx} y1={cy + 10} x2={cx} y2={cy + 14} stroke="#1e293b" strokeWidth={2} />
+                          <line x1={cx - 6} y1={cy + 14} x2={cx + 6} y2={cy + 14} stroke="#1e293b" strokeWidth={2} />
+                          <text x={cx + 18} y={cy + 4} fontSize="10.5" fontWeight="700" fill="#0369a1">
+                            🖥️ {dev.label}
+                          </text>
+                        </g>
+                      );
+                    } else if (dev.type === 'pir_sensor') {
+                      return (
+                        <g
+                          key={dev.id}
+                          onMouseDown={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onTouchStart={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(dev.id)}
+                          onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
+                          className={isBeingDragged ? 'cursor-grabbing' : 'cursor-pointer'}
+                        >
+                          <rect x={cx - 8} y={cy - 10} width={16} height={20} fill="#ffffff" stroke="#d97706" strokeWidth={1.5} rx={2} />
+                          <circle cx={cx} cy={cy - 2} r={4} fill="#f59e0b" />
+                          <text x={cx + 14} y={cy + 4} fontSize="10.5" fontWeight="700" fill="#b45309">
+                            📡 {dev.label}
                           </text>
                         </g>
                       );
@@ -1858,71 +2663,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       return (
                         <g
                           key={dev.id}
-                          onMouseDown={(e) =>
-                            handleElementMouseDown(e, dev.id, 'device', dev.x, dev.y)
-                          }
-                          onTouchStart={(e) =>
-                            handleElementMouseDown(e, dev.id, 'device', dev.x, dev.y)
-                          }
+                          onMouseDown={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
+                          onTouchStart={(e) => handleElementPressStart(e, dev.id, 'device', dev.x, dev.y)}
                           onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(dev.id)}
                           onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
-                          className={
-                            activeTool === 'eraser'
-                              ? 'cursor-pointer'
-                              : 'cursor-grab active:cursor-grabbing'
-                          }
+                          className={isBeingDragged ? 'cursor-grabbing' : 'cursor-pointer'}
                         >
-                          <circle
-                            cx={cx}
-                            cy={cy}
-                            r={11}
-                            fill={isEraseHovered ? '#7f1d1d' : isSelected ? '#b91c1c' : '#dc2626'}
-                            stroke="#ffffff"
-                            strokeWidth={2}
-                          />
-                          <text
-                            x={cx}
-                            y={cy + 4}
-                            fontSize="10"
-                            fontWeight="bold"
-                            fill="#ffffff"
-                            textAnchor="middle"
-                          >
+                          <circle cx={cx} cy={cy} r={12} fill={isEraseHovered ? '#7f1d1d' : isSelected ? '#b91c1c' : '#dc2626'} stroke="#ffffff" strokeWidth={2} />
+                          <text x={cx} y={cy + 4} fontSize="10" fontWeight="bold" fill="#ffffff" textAnchor="middle">
                             {isEraseHovered ? '✖' : '🚨'}
                           </text>
-                          {isSelected && isDraggingElement && (
-                            <g transform={`translate(${cx}, ${cy - 24})`}>
-                              <rect
-                                x="-44"
-                                y="-14"
-                                width="88"
-                                height="18"
-                                rx="9"
-                                fill="#0f172a"
-                                stroke="#10b981"
-                                strokeWidth="1.5"
-                              />
-                              <text
-                                x="0"
-                                y="-2"
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                fontSize="9.5"
-                                fontFamily="monospace"
-                                fontWeight="700"
-                              >
-                                {dev.x.toFixed(2)}m · {dev.y.toFixed(2)}m
-                              </text>
-                            </g>
-                          )}
-                          <text
-                            x={cx + 16}
-                            y={cy + 4}
-                            fontSize="11"
-                            fontWeight="700"
-                            fill={isEraseHovered ? '#b91c1c' : '#dc2626'}
-                          >
-                            {dev.label} {isEraseHovered && '(Effacer)'}
+                          <text x={cx + 16} y={cy + 4} fontSize="11" fontWeight="700" fill={isEraseHovered ? '#b91c1c' : '#dc2626'}>
+                            {dev.label}
                           </text>
                         </g>
                       );
@@ -1930,7 +2682,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     return null;
                   })}
 
-                  {/* 5. Draw Text Annotations */}
+                  {/* 7. Text Annotations */}
                   {plan.annotations.map((ann) => {
                     const isEraseHovered = activeTool === 'eraser' && hoveredEraseId === ann.id;
                     return (
@@ -1942,12 +2694,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         fontWeight="600"
                         fill={isEraseHovered ? '#ef4444' : ann.color || '#047857'}
                         textDecoration={isEraseHovered ? 'line-through' : undefined}
-                        onMouseDown={(e) =>
-                          handleElementMouseDown(e, ann.id, 'annotation', ann.x, ann.y)
-                        }
-                        onTouchStart={(e) =>
-                          handleElementMouseDown(e, ann.id, 'annotation', ann.x, ann.y)
-                        }
+                        onMouseDown={(e) => handleElementPressStart(e, ann.id, 'annotation', ann.x, ann.y)}
+                        onTouchStart={(e) => handleElementPressStart(e, ann.id, 'annotation', ann.x, ann.y)}
                         onMouseEnter={() => activeTool === 'eraser' && setHoveredEraseId(ann.id)}
                         onMouseLeave={() => activeTool === 'eraser' && setHoveredEraseId(null)}
                         className="cursor-pointer select-none"
@@ -1956,152 +2704,46 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       </text>
                     );
                   })}
+
+                  {/* 8. Active Distance Measurement Line */}
+                  {activeTool === 'measure' && measureStart && measureCurrent && (
+                    <g className="pointer-events-none">
+                      <line
+                        x1={measureStart.x * SCALE}
+                        y1={measureStart.y * SCALE}
+                        x2={measureCurrent.x * SCALE}
+                        y2={measureCurrent.y * SCALE}
+                        stroke="#4f46e5"
+                        strokeWidth={2}
+                        strokeDasharray="4 2"
+                      />
+                      <circle cx={measureStart.x * SCALE} cy={measureStart.y * SCALE} r={4} fill="#4f46e5" />
+                      <circle cx={measureCurrent.x * SCALE} cy={measureCurrent.y * SCALE} r={4} fill="#4f46e5" />
+                      <rect
+                        x={(measureStart.x + measureCurrent.x) / 2 * SCALE - 35}
+                        y={(measureStart.y + measureCurrent.y) / 2 * SCALE - 12}
+                        width="70"
+                        height="20"
+                        rx="10"
+                        fill="#312e81"
+                      />
+                      <text
+                        x={(measureStart.x + measureCurrent.x) / 2 * SCALE}
+                        y={(measureStart.y + measureCurrent.y) / 2 * SCALE + 2}
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize="11"
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                      >
+                        {Math.hypot(measureCurrent.x - measureStart.x, measureCurrent.y - measureStart.y).toFixed(2)}m
+                      </text>
+                    </g>
+                  )}
                 </svg>
-
-                {/* Long Press Quick Device Creation Popup Modal */}
-                {longPressMenu && (
-                  <div
-                    className="absolute z-40 bg-slate-900/95 backdrop-blur-md text-white border border-emerald-500/60 shadow-2xl rounded-2xl p-3.5 w-72 sm:w-80 animate-in zoom-in-95 duration-150"
-                    style={{
-                      left: Math.min(
-                        Math.max(12, longPressMenu.pixelX - 140),
-                        canvasWidthPx - 300
-                      ),
-                      top: Math.min(
-                        Math.max(12, longPressMenu.pixelY - 170),
-                        canvasHeightPx - 250
-                      ),
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-700/70 text-xs">
-                      <span className="font-bold flex items-center gap-1.5 text-emerald-400">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
-                        <span>{isRtl ? 'إضافة جهاز (ضغط مطول)' : 'Appui Long : Poser un équipement'}</span>
-                      </span>
-                      <button
-                        onClick={() => setLongPressMenu(null)}
-                        className="text-slate-400 hover:text-white p-0.5 rounded transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-300 py-1.5 font-mono">
-                      <span>Position :</span>
-                      <span className="text-emerald-300 font-bold bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
-                        X = {longPressMenu.x.toFixed(2)}m · Y = {longPressMenu.y.toFixed(2)}m
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          createDeviceOrElementAtCoords('camera_bullet', longPressMenu.x, longPressMenu.y);
-                          setLongPressMenu(null);
-                        }}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-700 border border-emerald-700/60 text-left transition-colors cursor-pointer group"
-                      >
-                        <div className="p-1.5 rounded-md bg-emerald-800 group-hover:bg-emerald-600 text-white shrink-0">
-                          <Video className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">Caméra Bullet</div>
-                          <div className="text-[10px] text-emerald-300">Tube Ext/Int</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          createDeviceOrElementAtCoords('camera_dome', longPressMenu.x, longPressMenu.y);
-                          setLongPressMenu(null);
-                        }}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-cyan-950/80 hover:bg-cyan-700 border border-cyan-700/60 text-left transition-colors cursor-pointer group"
-                      >
-                        <div className="p-1.5 rounded-md bg-cyan-800 group-hover:bg-cyan-600 text-white shrink-0">
-                          <Video className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">Caméra Dôme</div>
-                          <div className="text-[10px] text-cyan-300">360° Plafond</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          createDeviceOrElementAtCoords('dvr', longPressMenu.x, longPressMenu.y);
-                          setLongPressMenu(null);
-                        }}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-indigo-950/80 hover:bg-indigo-700 border border-indigo-700/60 text-left transition-colors cursor-pointer group"
-                      >
-                        <div className="p-1.5 rounded-md bg-indigo-800 group-hover:bg-indigo-600 text-white shrink-0">
-                          <Server className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">Enregistreur</div>
-                          <div className="text-[10px] text-indigo-300">NVR / DVR 16ch</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          createDeviceOrElementAtCoords('alarm_siren', longPressMenu.x, longPressMenu.y);
-                          setLongPressMenu(null);
-                        }}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-rose-950/80 hover:bg-rose-700 border border-rose-700/60 text-left transition-colors cursor-pointer group"
-                      >
-                        <div className="p-1.5 rounded-md bg-rose-800 group-hover:bg-rose-600 text-white shrink-0">
-                          <ShieldAlert className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">Sirène Alarme</div>
-                          <div className="text-[10px] text-rose-300">113 dB Flash</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          createDeviceOrElementAtCoords('door', longPressMenu.x, longPressMenu.y);
-                          setLongPressMenu(null);
-                        }}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition-colors cursor-pointer group"
-                      >
-                        <div className="p-1.5 rounded-md bg-slate-700 group-hover:bg-slate-600 text-amber-400 shrink-0">
-                          <DoorOpen className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">Porte</div>
-                          <div className="text-[10px] text-slate-300">Battant 1.0m</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          createDeviceOrElementAtCoords('emergency_exit', longPressMenu.x, longPressMenu.y);
-                          setLongPressMenu(null);
-                        }}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition-colors cursor-pointer group"
-                      >
-                        <div className="p-1.5 rounded-md bg-slate-700 group-hover:bg-slate-600 text-emerald-400 shrink-0">
-                          <DoorOpen className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">Sortie Secours</div>
-                          <div className="text-[10px] text-emerald-300">Issue Verte</div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
-              <div className="w-full h-full min-h-[540px]">
+              <div className="w-full h-full min-h-[560px]">
                 <FloorPlan3DCanvas
                   plan={plan}
                   activeDeviceId={selectedType === 'device' ? selectedId : null}
@@ -2128,9 +2770,236 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               )}
             </h3>
 
-            {/* If a Camera or Security Device is selected */}
+            {/* If Gate Selected (NEW) */}
+            {selectedGate && (
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Nom du Portail
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedGate.label || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPlan((prev) => ({
+                        ...prev,
+                        gates: (prev.gates || []).map((g) =>
+                          g.id === selectedGate.id ? { ...g, label: val } : g
+                        ),
+                      }));
+                    }}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-emerald-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Largeur d'Ouverture : {selectedGate.width}m
+                  </label>
+                  <input
+                    type="range"
+                    min="2.0"
+                    max="6.0"
+                    step="0.25"
+                    value={selectedGate.width}
+                    onChange={(e) => {
+                      const w = parseFloat(e.target.value);
+                      setPlan((prev) => ({
+                        ...prev,
+                        gates: (prev.gates || []).map((g) =>
+                          g.id === selectedGate.id ? { ...g, width: w } : g
+                        ),
+                      }));
+                    }}
+                    className="w-full accent-emerald-600 cursor-pointer"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={selectedGate.isMotorized}
+                    onChange={(e) => {
+                      const mot = e.target.checked;
+                      setPlan((prev) => ({
+                        ...prev,
+                        gates: (prev.gates || []).map((g) =>
+                          g.id === selectedGate.id ? { ...g, isMotorized: mot } : g
+                        ),
+                      }));
+                    }}
+                    className="rounded text-emerald-600"
+                  />
+                  <span className="font-semibold text-slate-800">
+                    Portail Motorisé Électrique (Télécommande)
+                  </span>
+                </label>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => handleRotateSelected(90)}
+                    className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium cursor-pointer"
+                  >
+                    Pivoter 90°
+                  </button>
+                  <button
+                    onClick={handleDeleteSelected}
+                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* If Stair Selected (NEW) */}
+            {selectedStair && (
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Nom de l'Escalier
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedStair.label || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPlan((prev) => ({
+                        ...prev,
+                        stairs: (prev.stairs || []).map((s) =>
+                          s.id === selectedStair.id ? { ...s, label: val } : s
+                        ),
+                      }));
+                    }}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-emerald-600 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Largeur : {selectedStair.width}m
+                    </label>
+                    <input
+                      type="range"
+                      min="0.8"
+                      max="2.5"
+                      step="0.1"
+                      value={selectedStair.width}
+                      onChange={(e) => {
+                        const w = parseFloat(e.target.value);
+                        setPlan((prev) => ({
+                          ...prev,
+                          stairs: (prev.stairs || []).map((s) =>
+                            s.id === selectedStair.id ? { ...s, width: w } : s
+                          ),
+                        }));
+                      }}
+                      className="w-full accent-emerald-600 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Longueur : {selectedStair.length}m
+                    </label>
+                    <input
+                      type="range"
+                      min="1.5"
+                      max="5.0"
+                      step="0.2"
+                      value={selectedStair.length}
+                      onChange={(e) => {
+                        const len = parseFloat(e.target.value);
+                        setPlan((prev) => ({
+                          ...prev,
+                          stairs: (prev.stairs || []).map((s) =>
+                            s.id === selectedStair.id ? { ...s, length: len } : s
+                          ),
+                        }));
+                      }}
+                      className="w-full accent-emerald-600 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Nb Marches : {selectedStair.steps}
+                    </label>
+                    <input
+                      type="number"
+                      min="4"
+                      max="24"
+                      value={selectedStair.steps}
+                      onChange={(e) => {
+                        const st = parseInt(e.target.value, 10) || 12;
+                        setPlan((prev) => ({
+                          ...prev,
+                          stairs: (prev.stairs || []).map((s) =>
+                            s.id === selectedStair.id ? { ...s, steps: st } : s
+                          ),
+                        }));
+                      }}
+                      className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Sens Escalier
+                    </label>
+                    <select
+                      value={selectedStair.direction}
+                      onChange={(e) => {
+                        const dir = e.target.value as 'up' | 'down';
+                        setPlan((prev) => ({
+                          ...prev,
+                          stairs: (prev.stairs || []).map((s) =>
+                            s.id === selectedStair.id ? { ...s, direction: dir } : s
+                          ),
+                        }));
+                      }}
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white"
+                    >
+                      <option value="up">Montée ↗</option>
+                      <option value="down">Descente ↘</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => handleRotateSelected(90)}
+                    className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium cursor-pointer"
+                  >
+                    Pivoter 90°
+                  </button>
+                  <button
+                    onClick={handleDeleteSelected}
+                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* If Camera / Security Device Selected */}
             {selectedDevice && (
               <div className="space-y-3 text-xs">
+                {(selectedDevice.type === 'camera_bullet' ||
+                  selectedDevice.type === 'camera_dome' ||
+                  selectedDevice.type === 'camera_ptz') && (
+                  <button
+                    onClick={() => setSimulatedCameraId(selectedDevice.id)}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-semibold transition-colors cursor-pointer shadow-xs"
+                  >
+                    <MonitorPlay className="w-4 h-4 text-emerald-400" />
+                    <span>{t.btnLivePov}</span>
+                  </button>
+                )}
+
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Nom / Libellé Affiché
@@ -2171,9 +3040,84 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   />
                 </div>
 
+                {/* Precision Coordinates Control */}
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-2">
+                  <div className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                    <span>Position Métrique (X, Y)</span>
+                    <span className="font-mono text-emerald-700 font-bold">
+                      {selectedDevice.x.toFixed(2)}m · {selectedDevice.y.toFixed(2)}m
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div>
+                      <span className="text-slate-500">Axe X:</span>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <button
+                          onClick={() => {
+                            setPlan((prev) => ({
+                              ...prev,
+                              devices: prev.devices.map((d) =>
+                                d.id === selectedDevice.id ? { ...d, x: Math.max(0, d.x - 0.5) } : d
+                              ),
+                            }));
+                          }}
+                          className="px-1.5 py-0.5 bg-white border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+                        >
+                          -0.5
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPlan((prev) => ({
+                              ...prev,
+                              devices: prev.devices.map((d) =>
+                                d.id === selectedDevice.id ? { ...d, x: Math.min(plan.widthMeters, d.x + 0.5) } : d
+                              ),
+                            }));
+                          }}
+                          className="px-1.5 py-0.5 bg-white border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+                        >
+                          +0.5
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Axe Y:</span>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <button
+                          onClick={() => {
+                            setPlan((prev) => ({
+                              ...prev,
+                              devices: prev.devices.map((d) =>
+                                d.id === selectedDevice.id ? { ...d, y: Math.max(0, d.y - 0.5) } : d
+                              ),
+                            }));
+                          }}
+                          className="px-1.5 py-0.5 bg-white border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+                        >
+                          -0.5
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPlan((prev) => ({
+                              ...prev,
+                              devices: prev.devices.map((d) =>
+                                d.id === selectedDevice.id ? { ...d, y: Math.min(plan.heightMeters, d.y + 0.5) } : d
+                              ),
+                            }));
+                          }}
+                          className="px-1.5 py-0.5 bg-white border border-slate-300 rounded hover:bg-slate-100 cursor-pointer"
+                        >
+                          +0.5
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* If Camera: FOV and Angle Controls */}
                 {(selectedDevice.type === 'camera_bullet' ||
-                  selectedDevice.type === 'camera_dome') && (
+                  selectedDevice.type === 'camera_dome' ||
+                  selectedDevice.type === 'camera_ptz') && (
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -2200,7 +3144,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Angle Direction ({selectedDevice.rotation}°)
+                          Angle ({selectedDevice.rotation}°)
                         </label>
                         <input
                           type="range"
@@ -2225,35 +3169,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Champ de Vision FOV ({selectedDevice.fovAngle}°)
-                        </label>
-                        <input
-                          type="range"
-                          min="45"
-                          max="140"
-                          step="5"
-                          value={selectedDevice.fovAngle}
-                          onChange={(e) => {
-                            const fov = parseInt(e.target.value, 10);
-                            setPlan((prev) => ({
-                              ...prev,
-                              devices: prev.devices.map((d) =>
-                                d.id === selectedDevice.id ? { ...d, fovAngle: fov } : d
-                              ),
-                            }));
-                          }}
-                          className="w-full accent-emerald-600 cursor-pointer"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Portée Vision ({selectedDevice.range}m)
+                          Portée ({selectedDevice.range}m)
                         </label>
                         <input
                           type="range"
                           min="4"
-                          max="30"
+                          max="35"
                           step="1"
                           value={selectedDevice.range}
                           onChange={(e) => {
@@ -2268,6 +3189,31 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                           className="w-full accent-emerald-600 cursor-pointer"
                         />
                       </div>
+
+                      {selectedDevice.type !== 'camera_ptz' && (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                            FOV ({selectedDevice.fovAngle}°)
+                          </label>
+                          <input
+                            type="range"
+                            min="45"
+                            max="140"
+                            step="5"
+                            value={selectedDevice.fovAngle}
+                            onChange={(e) => {
+                              const fov = parseInt(e.target.value, 10);
+                              setPlan((prev) => ({
+                                ...prev,
+                                devices: prev.devices.map((d) =>
+                                  d.id === selectedDevice.id ? { ...d, fovAngle: fov } : d
+                                ),
+                              }));
+                            }}
+                            className="w-full accent-emerald-600 cursor-pointer"
+                          />
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -2275,14 +3221,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="pt-2 flex items-center justify-between gap-2">
                   <button
                     onClick={() => handleRotateSelected(45)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium cursor-pointer"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
                     <span>Pivoter 45°</span>
                   </button>
                   <button
                     onClick={handleDeleteSelected}
-                    className="inline-flex items-center justify-center p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors"
+                    className="inline-flex items-center justify-center p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors cursor-pointer"
                     title="Supprimer"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -2291,7 +3237,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </div>
             )}
 
-            {/* If a Room is selected */}
+            {/* If Room Selected */}
             {selectedRoom && (
               <div className="space-y-3 text-xs">
                 <div>
@@ -2333,6 +3279,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium font-cairo"
                   />
                 </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
@@ -2383,7 +3330,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="pt-2">
                   <button
                     onClick={handleDeleteSelected}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors font-medium"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors font-medium cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Supprimer cette pièce</span>
@@ -2392,34 +3339,32 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </div>
             )}
 
-            {/* If Door is selected */}
+            {/* If Door Selected */}
             {selectedDoor && (
               <div className="space-y-3 text-xs">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Type d'Accès
                   </label>
-                  <div className="flex items-center gap-2">
-                    <label className="inline-flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={selectedDoor.isEmergencyExit}
-                        onChange={(e) => {
-                          const isExit = e.target.checked;
-                          setPlan((prev) => ({
-                            ...prev,
-                            doors: prev.doors.map((d) =>
-                              d.id === selectedDoor.id ? { ...d, isEmergencyExit: isExit } : d
-                            ),
-                          }));
-                        }}
-                        className="rounded text-emerald-600"
-                      />
-                      <span className="font-semibold text-emerald-800">
-                        Issue de Secours Officielle (Balisée)
-                      </span>
-                    </label>
-                  </div>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedDoor.isEmergencyExit}
+                      onChange={(e) => {
+                        const isExit = e.target.checked;
+                        setPlan((prev) => ({
+                          ...prev,
+                          doors: prev.doors.map((d) =>
+                            d.id === selectedDoor.id ? { ...d, isEmergencyExit: isExit } : d
+                          ),
+                        }));
+                      }}
+                      className="rounded text-emerald-600"
+                    />
+                    <span className="font-semibold text-emerald-800">
+                      Issue de Secours Officielle (Balisée)
+                    </span>
+                  </label>
                 </div>
 
                 <div>
@@ -2428,7 +3373,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </label>
                   <button
                     onClick={() => handleRotateSelected(90)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium cursor-pointer"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
                     <span>Pivoter 90°</span>
@@ -2437,7 +3382,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
                 <button
                   onClick={handleDeleteSelected}
-                  className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors font-medium"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors font-medium cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Supprimer cette porte</span>
@@ -2445,19 +3390,130 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </div>
             )}
 
-            {/* Empty state when nothing is selected */}
             {!selectedId && (
               <div className="text-center py-8 text-slate-400 space-y-2">
                 <Sliders className="w-8 h-8 mx-auto opacity-50" />
                 <p className="text-xs">
-                  Cliquez sur un équipement, une caméra ou un mur du plan pour modifier ses
-                  propriétés.
+                  Cliquez sur un équipement, portail, escalier ou mur pour modifier ses propriétés.
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  💡 Pour déplacer un élément : appuyez longuement (0.3s) puis faites-le glisser.
                 </p>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Simulated Live Camera POV Modal */}
+      {activePovCamera && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-slate-950 text-white border border-slate-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                <span className="font-bold text-xs uppercase tracking-wider text-rose-400">
+                  DIRECT · SURVEILLANCE CCTV
+                </span>
+                <span className="text-slate-500">|</span>
+                <span className="text-xs font-semibold text-slate-200">
+                  {activePovCamera.label}
+                </span>
+              </div>
+              <button
+                onClick={() => setSimulatedCameraId(null)}
+                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div
+              className={`relative aspect-video w-full overflow-hidden flex items-center justify-center transition-colors duration-300 ${
+                simNightMode ? 'bg-slate-950 text-emerald-400' : 'bg-slate-900 text-white'
+              }`}
+            >
+              <div className="absolute inset-4 pointer-events-none border border-white/15 rounded-lg">
+                <div className="absolute inset-0 flex items-center justify-center opacity-30">
+                  <Crosshair className="w-16 h-16" />
+                </div>
+
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-xs font-mono font-bold drop-shadow">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">
+                      ● REC
+                    </span>
+                    <span>{simTimestamp}</span>
+                  </div>
+                  <div>
+                    <span>{activePovCamera.resolution}</span> · <span>30 FPS</span> · <span>H.265+</span>
+                  </div>
+                </div>
+
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-32 h-44 border-2 border-emerald-400/80 bg-emerald-500/10 rounded flex flex-col justify-between p-1">
+                  <span className="text-[9px] font-mono bg-emerald-950/80 text-emerald-300 px-1 py-0.5 rounded self-start font-bold">
+                    DÉTECTION : VÉHICULE (98%)
+                  </span>
+                  <span className="text-[9px] font-mono text-emerald-300 self-end">
+                    DIST : 8.2m
+                  </span>
+                </div>
+
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs font-mono font-bold drop-shadow">
+                  <span>CANAL 0{activePovCamera.channel || 1} · {activePovCamera.modelName}</span>
+                  <span>ZOOM : {simDigitalZoom}x {simNightMode && '· MODE INFRAROUGE (IR)'}</span>
+                </div>
+              </div>
+
+              <div
+                className="text-center space-y-2 pointer-events-none select-none transition-transform duration-200"
+                style={{ transform: `scale(${simDigitalZoom})` }}
+              >
+                <Video className={`w-16 h-16 mx-auto ${simNightMode ? 'text-emerald-500/40' : 'text-slate-600'}`} />
+                <div className="text-xs font-mono text-slate-400">
+                  Angle de vue : {activePovCamera.rotation}° | Portée IR : {activePovCamera.range}m
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Flux vidéo haute fidélité simulé pour la Wilaya d'Oran
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSimNightMode((n) => !n)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+                    simNightMode
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {simNightMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                  <span>{simNightMode ? 'Mode Jour' : 'Vision Nocturne IR'}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Zoom Numérique :</span>
+                {[1, 2, 4].map((z) => (
+                  <button
+                    key={z}
+                    onClick={() => setSimDigitalZoom(z)}
+                    className={`px-2.5 py-1 rounded-md font-mono font-bold cursor-pointer transition-colors ${
+                      simDigitalZoom === z
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {z}x
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

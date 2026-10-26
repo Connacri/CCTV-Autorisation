@@ -212,7 +212,95 @@ export const FloorPlan3DCanvas: React.FC<FloorPlan3DCanvasProps> = ({
       scene.add(winMesh);
     });
 
-    // 9. Security Equipment in 3D (Cameras, DVR, Alarm)
+    // 8b. Vehicle Gates in 3D (Portails)
+    plan.gates?.forEach((gate) => {
+      const gateGroup = new THREE.Group();
+      gateGroup.position.set(gate.x, 0, gate.y);
+      gateGroup.rotation.y = (gate.angle * Math.PI) / 180;
+
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+      const barMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.4 });
+
+      // Left and Right Posts
+      const postGeo = new THREE.BoxGeometry(0.2, 2.4, 0.2);
+      const postL = new THREE.Mesh(postGeo, postMat);
+      postL.position.set(-gate.width / 2, 1.2, 0);
+      postL.castShadow = true;
+      gateGroup.add(postL);
+
+      const postR = new THREE.Mesh(postGeo, postMat);
+      postR.position.set(gate.width / 2, 1.2, 0);
+      postR.castShadow = true;
+      gateGroup.add(postR);
+
+      // Horizontal Top & Bottom Frame
+      const barGeo = new THREE.BoxGeometry(gate.width - 0.2, 0.08, 0.06);
+      const barTop = new THREE.Mesh(barGeo, barMat);
+      barTop.position.set(0, 2.1, 0);
+      gateGroup.add(barTop);
+
+      const barBot = new THREE.Mesh(barGeo, barMat);
+      barBot.position.set(0, 0.3, 0);
+      gateGroup.add(barBot);
+
+      // Vertical Grille Bars
+      const numBars = Math.floor(gate.width * 5);
+      for (let i = 1; i < numBars; i++) {
+        const vBarGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.8, 8);
+        const vBar = new THREE.Mesh(vBarGeo, barMat);
+        const step = (gate.width - 0.4) / numBars;
+        vBar.position.set(-gate.width / 2 + 0.2 + i * step, 1.2, 0);
+        vBar.castShadow = true;
+        gateGroup.add(vBar);
+      }
+
+      // Motor Box if motorized
+      if (gate.isMotorized) {
+        const motorGeo = new THREE.BoxGeometry(0.3, 0.4, 0.25);
+        const motorMat = new THREE.MeshStandardMaterial({ color: 0x059669 });
+        const motor = new THREE.Mesh(motorGeo, motorMat);
+        motor.position.set(gate.width / 2 + 0.2, 0.4, 0.1);
+        gateGroup.add(motor);
+      }
+
+      scene.add(gateGroup);
+    });
+
+    // 8c. Stairs in 3D (Escaliers)
+    plan.stairs?.forEach((stair) => {
+      const stairGroup = new THREE.Group();
+      stairGroup.position.set(stair.x, 0, stair.y);
+      stairGroup.rotation.y = (stair.angle * Math.PI) / 180;
+
+      const stepCount = stair.steps || 12;
+      const totalHeight = 2.8;
+      const stepHeight = totalHeight / stepCount;
+      const stepLength = (stair.length || 2.8) / stepCount;
+
+      const stepMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
+
+      for (let s = 0; s < stepCount; s++) {
+        const h = (s + 1) * stepHeight;
+        const boxGeo = new THREE.BoxGeometry(stair.width, h, stepLength);
+        const stepMesh = new THREE.Mesh(boxGeo, stepMat);
+        stepMesh.position.set(0, h / 2, -stair.length / 2 + (s + 0.5) * stepLength);
+        stepMesh.castShadow = true;
+        stepMesh.receiveShadow = true;
+        stairGroup.add(stepMesh);
+      }
+
+      // Side Handrail
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7 });
+      const railGeo = new THREE.CylinderGeometry(0.03, 0.03, Math.hypot(stair.length, totalHeight), 8);
+      const rail = new THREE.Mesh(railGeo, railMat);
+      rail.position.set(stair.width / 2, totalHeight / 2 + 0.8, 0);
+      rail.rotation.x = Math.atan2(stair.length, totalHeight);
+      stairGroup.add(rail);
+
+      scene.add(stairGroup);
+    });
+
+    // 9. Security Equipment in 3D (Cameras, DVR, Alarm, PTZ, Monitor, PIR)
     plan.devices.forEach((dev) => {
       const isSelected = dev.id === activeDeviceId;
       const deviceGroup = new THREE.Group();
@@ -352,6 +440,53 @@ export const FloorPlan3DCanvas: React.FC<FloorPlan3DCanvasProps> = ({
         const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
         beaconMesh.position.set(0, 0.12, 0.12);
         deviceGroup.add(beaconMesh);
+      } else if (dev.type === 'camera_ptz') {
+        // PTZ 360 Camera
+        const ptzBaseGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.35, 16);
+        const ptzBaseMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+        const ptzBase = new THREE.Mesh(ptzBaseGeo, ptzBaseMat);
+        deviceGroup.add(ptzBase);
+
+        const ptzSphereGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        const ptzSphereMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1 });
+        const ptzSphere = new THREE.Mesh(ptzSphereGeo, ptzSphereMat);
+        ptzSphere.position.set(0, -0.15, 0);
+        deviceGroup.add(ptzSphere);
+
+        // 360 Panoramic Vision Frustum (Ring/Disc)
+        const fovDiscGeo = new THREE.CylinderGeometry(Math.min(dev.range || 15, 18), Math.min(dev.range || 15, 18), 0.05, 32);
+        const fovDiscMat = new THREE.MeshBasicMaterial({
+          color: isSelected ? 0x10b981 : 0xa855f7,
+          transparent: true,
+          opacity: 0.15,
+        });
+        const fovDisc = new THREE.Mesh(fovDiscGeo, fovDiscMat);
+        fovDisc.position.set(0, -(dev.z || 3), 0);
+        deviceGroup.add(fovDisc);
+      } else if (dev.type === 'monitor_screen') {
+        // Security Display Monitor (Flat Screen)
+        const screenFrameGeo = new THREE.BoxGeometry(0.9, 0.55, 0.06);
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
+        const frameMesh = new THREE.Mesh(screenFrameGeo, frameMat);
+        deviceGroup.add(frameMesh);
+
+        const displayGeo = new THREE.PlaneGeometry(0.84, 0.5);
+        const displayMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const displayMesh = new THREE.Mesh(displayGeo, displayMat);
+        displayMesh.position.set(0, 0, 0.035);
+        deviceGroup.add(displayMesh);
+      } else if (dev.type === 'pir_sensor') {
+        // PIR Motion Sensor
+        const pirGeo = new THREE.BoxGeometry(0.18, 0.28, 0.12);
+        const pirMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc });
+        const pirMesh = new THREE.Mesh(pirGeo, pirMat);
+        deviceGroup.add(pirMesh);
+
+        const lensGeo = new THREE.SphereGeometry(0.06, 8, 8, 0, Math.PI);
+        const lensMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const lensMesh = new THREE.Mesh(lensGeo, lensMat);
+        lensMesh.position.set(0, -0.04, 0.06);
+        deviceGroup.add(lensMesh);
       }
 
       scene.add(deviceGroup);

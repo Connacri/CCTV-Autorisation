@@ -1,22 +1,30 @@
 export type DeviceType =
   | 'camera_bullet'
   | 'camera_dome'
+  | 'camera_ptz'
   | 'dvr'
   | 'alarm_siren'
-  | 'pir_sensor';
+  | 'pir_sensor'
+  | 'monitor_screen';
 
 export type ToolType =
   | 'select'
   | 'eraser'
   | 'room'
   | 'door'
+  | 'gate'
+  | 'stairs'
   | 'window'
   | 'emergency_exit'
   | 'camera_bullet'
   | 'camera_dome'
+  | 'camera_ptz'
   | 'dvr'
   | 'alarm_siren'
-  | 'text';
+  | 'pir_sensor'
+  | 'monitor_screen'
+  | 'text'
+  | 'measure';
 
 export interface RoomElement {
   id: string;
@@ -37,6 +45,28 @@ export interface DoorElement {
   width: number; // width in meters (default 0.9)
   angle: number; // rotation in degrees: 0, 90, 180, 270
   isEmergencyExit: boolean;
+  label?: string;
+}
+
+export interface GateElement {
+  id: string;
+  x: number; // in meters
+  y: number; // in meters
+  width: number; // width in meters (default 3.5m for vehicle gate)
+  angle: number; // rotation in degrees: 0, 90, 180, 270
+  isMotorized: boolean; // motorized / electric gate
+  label?: string;
+}
+
+export interface StairElement {
+  id: string;
+  x: number; // in meters
+  y: number; // in meters
+  width: number; // width in meters (default 1.2)
+  length: number; // length in meters (default 2.8)
+  steps: number; // number of steps (default 12)
+  angle: number; // rotation in degrees: 0, 90, 180, 270
+  direction: 'up' | 'down';
   label?: string;
 }
 
@@ -80,6 +110,8 @@ export interface FloorPlanData {
   heightMeters: number; // height of total canvas
   rooms: RoomElement[];
   doors: DoorElement[];
+  gates?: GateElement[];
+  stairs?: StairElement[];
   windows: WindowElement[];
   devices: SecurityDeviceElement[];
   annotations: TextAnnotationElement[];
@@ -186,6 +218,30 @@ export const PRESET_VILLA_ORAN: FloorPlanData = {
       label: 'Issue de Secours Arrière',
     },
   ],
+  gates: [
+    {
+      id: 'gate_main_villa',
+      x: 11,
+      y: 1.0,
+      width: 3.6,
+      angle: 0,
+      isMotorized: true,
+      label: 'Portail Véhicules Motorisé (3.6m)',
+    },
+  ],
+  stairs: [
+    {
+      id: 'stairs_main_villa',
+      x: 8.5,
+      y: 6.5,
+      width: 1.2,
+      length: 2.8,
+      steps: 12,
+      angle: 90,
+      direction: 'up',
+      label: 'Escalier Accès 1er Étage',
+    },
+  ],
   windows: [
     { id: 'win_1', x: 2.5, y: 5.5, width: 1.5, angle: 0 },
     { id: 'win_2', x: 8, y: 5.5, width: 1.5, angle: 0 },
@@ -210,13 +266,13 @@ export const PRESET_VILLA_ORAN: FloorPlanData = {
     {
       id: 'dev_cam2',
       type: 'camera_bullet',
-      x: 20.2,
-      y: 1.5,
+      x: 11.0,
+      y: 1.8,
       z: 2.8,
-      rotation: 120,
+      rotation: 90,
       fovAngle: 85,
       range: 12,
-      label: 'CAM-02 Portail & Entrée (Bullet 5MP)',
+      label: 'CAM-02 Portail & Entrée Véhicules (LPR)',
       modelName: 'Dahua IPC-HFW2431S',
       isOutdoor: true,
       resolution: '5MP 4K UHD - IR 30m',
@@ -253,6 +309,21 @@ export const PRESET_VILLA_ORAN: FloorPlanData = {
       channel: 4,
     },
     {
+      id: 'dev_ptz1',
+      type: 'camera_ptz',
+      x: 19.5,
+      y: 1.5,
+      z: 3.5,
+      rotation: 180,
+      fovAngle: 360,
+      range: 25,
+      label: 'CAM-05 Dôme PTZ 360° Cour & Angle',
+      modelName: 'Dahua SD49225XA-HNR (25x Optical Zoom)',
+      isOutdoor: true,
+      resolution: '4MP PTZ 360° Starlight',
+      channel: 5,
+    },
+    {
       id: 'dev_dvr',
       type: 'dvr',
       x: 18.2,
@@ -265,6 +336,34 @@ export const PRESET_VILLA_ORAN: FloorPlanData = {
       modelName: 'Dahua NVR4116-4KS2/L (HDD 4To)',
       isOutdoor: false,
       resolution: '16 Canaux 4K H.265+',
+    },
+    {
+      id: 'dev_monitor',
+      type: 'monitor_screen',
+      x: 19.5,
+      y: 6.8,
+      z: 1.2,
+      rotation: 0,
+      fovAngle: 0,
+      range: 0,
+      label: 'Moniteur Surveillance 32" 4K',
+      modelName: 'Dahua DHI-LM32-F200 LED',
+      isOutdoor: false,
+      resolution: '4K Ultra HD',
+    },
+    {
+      id: 'dev_pir',
+      type: 'pir_sensor',
+      x: 1.5,
+      y: 6.0,
+      z: 2.2,
+      rotation: 45,
+      fovAngle: 90,
+      range: 8,
+      label: 'Détecteur Mouvement PIR Entrée',
+      modelName: 'Ajax MotionProtect Plus',
+      isOutdoor: false,
+      resolution: 'Capteur double technologie',
     },
     {
       id: 'dev_alarm',
@@ -360,6 +459,30 @@ export const PRESET_STORE_ORAN: FloorPlanData = {
       label: 'Issue de Secours',
     },
   ],
+  gates: [
+    {
+      id: 'gate_store_loading',
+      x: 14.0,
+      y: 13.0,
+      width: 2.8,
+      angle: 0,
+      isMotorized: false,
+      label: 'Rideau Métallique / Portail Livraison',
+    },
+  ],
+  stairs: [
+    {
+      id: 'stairs_store_mezzanine',
+      x: 13.0,
+      y: 7.2,
+      width: 1.0,
+      length: 2.4,
+      steps: 10,
+      angle: 0,
+      direction: 'up',
+      label: 'Escalier Accès Mezzanine & Stock',
+    },
+  ],
   windows: [
     { id: 'w_store_1', x: 2, y: 1, width: 3, angle: 0 },
     { id: 'w_store_2', x: 6, y: 1, width: 3, angle: 0 },
@@ -440,6 +563,20 @@ export const PRESET_STORE_ORAN: FloorPlanData = {
       resolution: '8 Canaux 4K',
     },
     {
+      id: 's_monitor',
+      type: 'monitor_screen',
+      x: 13.5,
+      y: 2.5,
+      z: 1.4,
+      rotation: 180,
+      fovAngle: 0,
+      range: 0,
+      label: 'Moniteur Surveillance Caisse',
+      modelName: 'Moniteur 24" Full HD',
+      isOutdoor: false,
+      resolution: '1080p',
+    },
+    {
       id: 's_alarm',
       type: 'alarm_siren',
       x: 14.5,
@@ -472,6 +609,8 @@ export const PRESET_BLANK: FloorPlanData = {
   heightMeters: 14,
   rooms: [],
   doors: [],
+  gates: [],
+  stairs: [],
   windows: [],
   devices: [],
   annotations: [],
