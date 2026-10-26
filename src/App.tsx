@@ -27,6 +27,7 @@ import { CrudCatalogView } from './components/CrudCatalogView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { AccountDeletionView } from './components/AccountDeletionView';
 import { FloorPlanEditorView } from './components/FloorPlanEditorView';
+import { AiExpertAssistantModal } from './components/AiExpertAssistantModal';
 import {
   Download,
   Upload,
@@ -44,6 +45,9 @@ import {
   LayoutGrid,
   Undo2,
   Redo2,
+  Sparkles,
+  ShieldCheck,
+  Wand2,
 } from 'lucide-react';
 
 type ActiveTab =
@@ -181,6 +185,49 @@ export default function App() {
 
       return newRedo;
     });
+  };
+
+  // AI Assistant Modal state
+  const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
+  const [aiModalTab, setAiModalTab] = useState<'wizard' | 'audit' | 'faq'>('wizard');
+  const [isFieldAiDrafting, setIsFieldAiDrafting] = useState<string | null>(null);
+
+  const handleApplyAiValues = (newVals: Record<string, string>, summary: string) => {
+    pushUndoSnapshot();
+    setValues((prev) => ({
+      ...prev,
+      ...newVals,
+    }));
+    setStatusBanner(`✨ ${summary}`);
+    setTimeout(() => setStatusBanner(null), 6000);
+  };
+
+  const handleSuggestField = async (field: PdfFieldConfig) => {
+    setIsFieldAiDrafting(field.id);
+    try {
+      const res = await fetch('/api/gemini/suggest-field', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fieldId: field.id,
+          fieldLabel: field.labelFr,
+          currentVal: values[field.id] || '',
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.suggestionAr) {
+        pushUndoSnapshot();
+        handleUpdateValue(field.id, json.suggestionAr);
+        setStatusBanner(
+          `✨ Rédigé par l'IA : ${json.explanationFr || 'Formulation officielle appliquée'}`
+        );
+        setTimeout(() => setStatusBanner(null), 5000);
+      }
+    } catch (err) {
+      console.error('Suggest field error:', err);
+    } finally {
+      setIsFieldAiDrafting(null);
+    }
   };
 
   // Global Keyboard shortcuts listener: Ctrl+Z (Undo) and Ctrl+Y / Ctrl+Shift+Z (Redo)
@@ -555,6 +602,35 @@ export default function App() {
 
         {/* Zone 3: Primary Actions (Compact on Mobile) */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* 1-Click AI Expert Wizard button */}
+          <button
+            type="button"
+            onClick={() => {
+              setAiModalTab('wizard');
+              setIsAiModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 rounded-lg shadow-sm transition-all whitespace-nowrap cursor-pointer hover:shadow-emerald-500/20"
+            title="Assistant Expert IA Décret 09-410 (Mode Débutant)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+            <span className="hidden sm:inline">{t.btnAiWizard}</span>
+            <span className="sm:hidden">IA Débutant</span>
+          </button>
+
+          {/* Regulatory Compliance Audit */}
+          <button
+            type="button"
+            onClick={() => {
+              setAiModalTab('audit');
+              setIsAiModalOpen(true);
+            }}
+            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            title="Diagnostic de conformité au Décret 09-410"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Audit 09-410</span>
+          </button>
+
           {/* FR / EN / AR Language Switcher */}
           <button
             onClick={() => setLocale((l) => (l === 'fr' ? 'en' : l === 'en' ? 'ar' : 'fr'))}
@@ -871,6 +947,19 @@ export default function App() {
                       )}
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiModalTab('wizard');
+                      setIsAiModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-md transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+                    title="Assistant Expert IA : Remplir tout le dossier en 1 clic (Décret 09-410)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>✨ 1-Clic IA</span>
+                  </button>
 
                   <button
                     onClick={() => handleSaveCurrentDossierToObjectBox(true)}
@@ -1403,9 +1492,30 @@ export default function App() {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1.5 flex-nowrap">
-                        <span className="text-xs font-medium text-slate-600 truncate">
-                          {field.labelFr}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-medium text-slate-600 truncate">
+                            {field.labelFr}
+                          </span>
+                          {(field.multiline ||
+                            field.id.includes('reason') ||
+                            field.id.includes('measure') ||
+                            field.id.includes('tech') ||
+                            field.id.includes('activity')) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSuggestField(field);
+                              }}
+                              disabled={isFieldAiDrafting === field.id}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
+                              title="Rédiger automatiquement ce champ selon les normes officielles DRAG Oran"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-emerald-700" />
+                              <span>{isFieldAiDrafting === field.id ? '...' : '✨ IA'}</span>
+                            </button>
+                          )}
+                        </div>
                         <label
                           dir="rtl"
                           className={`${
@@ -1716,6 +1826,16 @@ export default function App() {
           </section>
         </main>
       )}
+
+      {/* AI Expert Assistant Modal (Novice Wizard & Decree 09-410 Compliance Audit) */}
+      <AiExpertAssistantModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        locale={locale}
+        currentValues={values}
+        onApplyValues={handleApplyAiValues}
+        initialTab={aiModalTab}
+      />
     </div>
   );
 }

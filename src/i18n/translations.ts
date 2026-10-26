@@ -57,23 +57,14 @@ export interface Translations {
   btnRedo: string;
   undoToast: string;
   redoToast: string;
-  floorPlanTitle: string;
-  floorPlanSubtitle: string;
-  longPressDragHint: string;
-  tapToSelectHint: string;
-  btnAutoSecure: string;
-  autoSecureToast: string;
-  securityAuditTitle: string;
-  storageCalcTitle: string;
-  livePovTitle: string;
-  btnLivePov: string;
-  step1Rooms: string;
-  step2Openings: string;
-  step3Cameras: string;
-  step4Export: string;
-  coveragePercent: string;
-  blindSpotsDetected: string;
-  noBlindSpots: string;
+  btnAiWizard: string;
+  btnAiAudit: string;
+  btnAiSuggestField: string;
+  aiModalTitle: string;
+  aiModalSubtitle: string;
+  aiTabWizard: string;
+  aiTabAudit: string;
+  aiTabFaq: string;
 }
 
 export const TRANSLATIONS: Record<AppLocale, Translations> = {
@@ -137,24 +128,14 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     btnRedo: 'Rétablir (Ctrl+Y)',
     undoToast: 'Annulation effectuée (état précédent restauré).',
     redoToast: 'Rétablissement effectué.',
-    floorPlanTitle: 'Schéma Architectural & Implantation Vidéosurveillance',
-    floorPlanSubtitle:
-      'Plan 2D et rendu 3D temps réel avec calcul de couverture, cônes de vision et conformité réglementaire DRAG Wilaya d’Oran.',
-    longPressDragHint: 'Appui long (0.3s) puis glisser pour déplacer n’importe quel élément',
-    tapToSelectHint: 'Clic simple pour sélectionner et modifier les propriétés',
-    btnAutoSecure: 'Placement Automatique Intelligent',
-    autoSecureToast: 'Sécurisation automatique appliquée : caméras, NVR et alarme placés sur les accès clés !',
-    securityAuditTitle: 'Audit & Conformité Réglementaire DRAG Oran',
-    storageCalcTitle: 'Calculateur d’Autonomie Disque NVR (30 Jours)',
-    livePovTitle: 'Simulateur de Vue Caméra en Direct',
-    btnLivePov: 'Vue Caméra Simulée',
-    step1Rooms: '1. Pièces & Murs',
-    step2Openings: '2. Portes & Fenêtres',
-    step3Cameras: '3. Caméras & NVR',
-    step4Export: '4. Vérifier & Exporter',
-    coveragePercent: 'Couverture du Site',
-    blindSpotsDetected: 'Angle mort détecté sur issue',
-    noBlindSpots: 'Toutes les issues sont surveillées',
+    btnAiWizard: 'Assistant IA Expert (Débutant)',
+    btnAiAudit: 'Diagnostic Réglementaire Décret 09-410',
+    btnAiSuggestField: '✨ Rédiger pour moi (IA)',
+    aiModalTitle: 'Assistant IA Expert Décret 09-410 & DRAG Oran',
+    aiModalSubtitle: 'Conception intelligente pour néophytes : pré-remplissage en 1 clic, conformité légale et conseils d’experts sans jargon.',
+    aiTabWizard: '🪄 Générateur 1 Clic',
+    aiTabAudit: '🛡️ Audit Conformité 09-410',
+    aiTabFaq: '💡 Guide Débutant DRAG',
   },
   en: {
     brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
@@ -216,24 +197,14 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     btnRedo: 'Redo (Ctrl+Y)',
     undoToast: 'Undo performed (previous state restored).',
     redoToast: 'Redo performed.',
-    floorPlanTitle: 'Architectural Layout & CCTV Security Plan',
-    floorPlanSubtitle:
-      '2D floor layout and real-time 3D isometric view with FOV coverage calculation, blind spot detection, and DRAG compliance.',
-    longPressDragHint: 'Long press (0.3s) then slide to move any element smoothly',
-    tapToSelectHint: 'Single tap/click to select and edit element properties',
-    btnAutoSecure: 'Intelligent Auto-Placement',
-    autoSecureToast: 'Auto-secure applied: cameras, NVR, and alarm automatically placed at key access points!',
-    securityAuditTitle: 'Security Audit & DRAG Oran Compliance',
-    storageCalcTitle: 'NVR Storage Calculator (30 Days Retention)',
-    livePovTitle: 'Live Camera POV Simulator',
-    btnLivePov: 'Simulated Camera View',
-    step1Rooms: '1. Rooms & Walls',
-    step2Openings: '2. Doors & Windows',
-    step3Cameras: '3. Cameras & NVR',
-    step4Export: '4. Verify & Export',
-    coveragePercent: 'Site Coverage',
-    blindSpotsDetected: 'Blind spot detected on doorway',
-    noBlindSpots: 'All building exits are covered',
+    btnAiWizard: 'AI Expert Assistant (Novice)',
+    btnAiAudit: 'Regulatory Compliance Audit (Decree 09-410)',
+    btnAiSuggestField: '✨ Draft for me (AI)',
+    aiModalTitle: 'AI Expert Assistant Decree 09-410 & DRAG Oran',
+    aiModalSubtitle: 'Effortless novice-friendly wizard: 1-click auto-fill, legal compliance checks, and clear guidance.',
+    aiTabWizard: '🪄 1-Click Wizard',
+    aiTabAudit: '🛡️ Compliance Audit',
+    aiTabFaq: '💡 Beginner Guide',
   },
   ar: {
     brandTitle: 'مديرية التنظيم والشؤون العامة · وهران (ObjectBox & Cairo PDF)',
@@ -294,23 +265,13 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     btnRedo: 'إعادة (Ctrl+Y)',
     undoToast: 'تم التراجع (استعادة الحالة السابقة).',
     redoToast: 'تمت الإعادة.',
-    floorPlanTitle: 'المخطط الهندسي للبناية وتوزيع كاميرات المراقبة',
-    floorPlanSubtitle:
-      'مخطط 2D وعرض ثلاثي الأبعاد 3D مع حساب زوايا الرؤية ونسبة التغطية ومطابقة معايير ولاية وهران.',
-    longPressDragHint: 'اضغط مطولاً (0.3 ثانية) ثم اسحب لتحريك أي عنصر بسلاسة',
-    tapToSelectHint: 'نقرة واحدة لتحديد العنصر وتعديل خصائصه',
-    btnAutoSecure: 'توزيع أمني ذكي تلقائي',
-    autoSecureToast: 'تم تطبيق التأمين الذكي: وضع الكاميرات وأجهزة التسجيل وأجهزة الإنذار على المداخل الحيوية تلقائياً!',
-    securityAuditTitle: 'تدقيق الأمان ومطابقة معايير ولاية وهران DRAG',
-    storageCalcTitle: 'حاسبة سعة قرص التسجيل NVR (30 يوماً)',
-    livePovTitle: 'محاكي زاوية رؤية الكاميرا الحية',
-    btnLivePov: 'معاينة رؤية الكاميرا',
-    step1Rooms: '1. الغرف والجدران',
-    step2Openings: '2. الأبواب والنوافذ',
-    step3Cameras: '3. الكاميرات وجهاز التسجيل',
-    step4Export: '4. التحقق والتصدير',
-    coveragePercent: 'نسبة التغطية الأمنية',
-    blindSpotsDetected: 'تم اكتشاف زاوية غير مغطاة في أحد المخارج',
-    noBlindSpots: 'جميع المداخل والمخارج تحت المراقبة',
+    btnAiWizard: 'المساعد الذكي للخبراء (للمبتدئين)',
+    btnAiAudit: 'فحص المطابقة القانونية (المرسوم 09-410)',
+    btnAiSuggestField: '✨ صياغة إدارية ذكية',
+    aiModalTitle: 'المساعد الذكي المعتمد للمرسوم 09-410 ومصالح وهران',
+    aiModalSubtitle: 'واجهة فائقة السهولة للمبتدئين: ملء الملف بضغطة زر، تدقيق قانوني وإرشادات مبسطة باللغة العربية.',
+    aiTabWizard: '🪄 المولد السحري (ضغطة واحدة)',
+    aiTabAudit: '🛡️ فحص المطابقة والاشتراطات',
+    aiTabFaq: '💡 دليل المبتدئين والإجراءات',
   },
 };
