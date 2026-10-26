@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   CatalogCategoryKey,
   INITIAL_PDF_FIELDS,
@@ -26,6 +26,7 @@ import { ObjectBoxHistoryView } from './components/ObjectBoxHistoryView';
 import { CrudCatalogView } from './components/CrudCatalogView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { AccountDeletionView } from './components/AccountDeletionView';
+import { FloorPlanEditorView } from './components/FloorPlanEditorView';
 import {
   Download,
   Upload,
@@ -40,10 +41,14 @@ import {
   Database,
   Plus,
   Settings2,
+  LayoutGrid,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 
 type ActiveTab =
   | 'workspace'
+  | 'floor_plan'
   | 'history'
   | 'catalog_crud'
   | 'analysis'
@@ -76,12 +81,133 @@ export default function App() {
     }
     return 'workspace';
   });
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+  }, [locale]);
+
   const [mobileWorkspacePane, setMobileWorkspacePane] = useState<'form' | 'pdf'>('form');
   const [fields, setFields] = useState<PdfFieldConfig[]>(INITIAL_PDF_FIELDS);
   const [values, setValues] = useState<Record<string, string>>(SAMPLE_ARABIC_VALUES);
   const [selectedPage, setSelectedPage] = useState<1 | 2 | 3>(1);
   const [viewAllPages, setViewAllPages] = useState<boolean>(false);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+
+  // Undo / Redo History Stack for (values & fields)
+  interface FormHistorySnapshot {
+    values: Record<string, string>;
+    fields: PdfFieldConfig[];
+  }
+  const [undoStack, setUndoStack] = useState<FormHistorySnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<FormHistorySnapshot[]>([]);
+  const valuesRef = useRef<Record<string, string>>(values);
+  valuesRef.current = values;
+  const fieldsRef = useRef<PdfFieldConfig[]>(fields);
+  fieldsRef.current = fields;
+  const isTypingSessionRef = useRef<boolean>(false);
+  const typingTimeoutRef = useRef<any>(null);
+
+  const pushUndoSnapshot = (customValues?: Record<string, string>, customFields?: PdfFieldConfig[]) => {
+    const currentValues = customValues || valuesRef.current;
+    const currentFields = customFields || fieldsRef.current;
+    const snapshot: FormHistorySnapshot = {
+      values: { ...currentValues },
+      fields: currentFields.map((f) => ({ ...f })),
+    };
+    setUndoStack((prev) => {
+      const last = prev[prev.length - 1];
+      if (last) {
+        if (
+          JSON.stringify(last.values) === JSON.stringify(snapshot.values) &&
+          JSON.stringify(last.fields) === JSON.stringify(snapshot.fields)
+        ) {
+          return prev;
+        }
+      }
+      const next = [...prev, snapshot];
+      return next.length > 35 ? next.slice(next.length - 35) : next;
+    });
+    setRedoStack([]);
+  };
+
+  const handleUndo = () => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      isTypingSessionRef.current = false;
+    }
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) return prevUndo;
+      const targetSnapshot = prevUndo[prevUndo.length - 1];
+      const newUndo = prevUndo.slice(0, prevUndo.length - 1);
+
+      const currentSnapshot: FormHistorySnapshot = {
+        values: { ...valuesRef.current },
+        fields: fieldsRef.current.map((f) => ({ ...f })),
+      };
+      setRedoStack((prevRedo) => [...prevRedo, currentSnapshot]);
+
+      setValues(targetSnapshot.values);
+      setFields(targetSnapshot.fields);
+
+      setStatusBanner(t.undoToast);
+      setTimeout(() => setStatusBanner(null), 3000);
+
+      return newUndo;
+    });
+  };
+
+  const handleRedo = () => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      isTypingSessionRef.current = false;
+    }
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) return prevRedo;
+      const targetSnapshot = prevRedo[prevRedo.length - 1];
+      const newRedo = prevRedo.slice(0, prevRedo.length - 1);
+
+      const currentSnapshot: FormHistorySnapshot = {
+        values: { ...valuesRef.current },
+        fields: fieldsRef.current.map((f) => ({ ...f })),
+      };
+      setUndoStack((prevUndo) => [...prevUndo, currentSnapshot]);
+
+      setValues(targetSnapshot.values);
+      setFields(targetSnapshot.fields);
+
+      setStatusBanner(t.redoToast);
+      setTimeout(() => setStatusBanner(null), 3000);
+
+      return newRedo;
+    });
+  };
+
+  // Global Keyboard shortcuts listener: Ctrl+Z (Undo) and Ctrl+Y / Ctrl+Shift+Z (Redo)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== 'workspace') return;
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+      if (!isCmdOrCtrl) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if (key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, t]);
 
   // ObjectBox state
   const [activeDossierId, setActiveDossierId] = useState<number | null>(1);
@@ -124,7 +250,22 @@ export default function App() {
     setCatalogItems(objectBoxStore.getAllCatalogItems());
   };
 
-  const handleUpdateValue = (fieldId: string, newValue: string) => {
+  const handleUpdateValue = (fieldId: string, newValue: string, isBurst = true) => {
+    if (isBurst) {
+      if (!isTypingSessionRef.current) {
+        pushUndoSnapshot();
+        isTypingSessionRef.current = true;
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      typingTimeoutRef.current = setTimeout(() => {
+        isTypingSessionRef.current = false;
+      }, 700);
+    } else {
+      pushUndoSnapshot();
+    }
+
     const targetField = fields.find((f) => f.id === fieldId);
     setValues((prev) => {
       const next = { ...prev, [fieldId]: newValue };
@@ -168,6 +309,7 @@ export default function App() {
   };
 
   const handleLoadDossierFromObjectBox = (dossier: DossierSubmissionEntity) => {
+    pushUndoSnapshot();
     setValues({ ...dossier.values });
     setActiveDossierId(dossier.id);
     setOverlayOptions((prev) => ({
@@ -201,7 +343,7 @@ export default function App() {
   ) => {
     const matchingFields = fields.filter((f) => f.catalogCategory === categoryKey);
     if (matchingFields.length > 0) {
-      handleUpdateValue(matchingFields[0].id, valueAr);
+      handleUpdateValue(matchingFields[0].id, valueAr, false);
       setSelectedPage(matchingFields[0].page);
       setActiveFieldId(matchingFields[0].id);
       setActiveTab('workspace');
@@ -225,6 +367,17 @@ export default function App() {
     key: 'xLeft' | 'xRight' | 'y' | 'fontSize',
     val: number
   ) => {
+    if (!isTypingSessionRef.current) {
+      pushUndoSnapshot();
+      isTypingSessionRef.current = true;
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingSessionRef.current = false;
+    }, 600);
+
     setFields((prev) =>
       prev.map((f) => (f.id === fieldId ? { ...f, [key]: val } : f))
     );
@@ -286,6 +439,7 @@ export default function App() {
   };
 
   const handleResetCoordinates = () => {
+    pushUndoSnapshot();
     setFields(INITIAL_PDF_FIELDS);
     setOverlayOptions((prev) => ({
       ...prev,
@@ -326,6 +480,16 @@ export default function App() {
             }`}
           >
             {t.navWorkspace}
+          </button>
+          <button
+            onClick={() => setActiveTab('floor_plan')}
+            className={`py-1 transition-colors whitespace-nowrap border-b-2 ${
+              activeTab === 'floor_plan'
+                ? 'border-emerald-700 text-slate-900 font-semibold'
+                : 'border-transparent hover:text-slate-900'
+            }`}
+          >
+            {t.navFloorPlan}
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -391,11 +555,11 @@ export default function App() {
 
         {/* Zone 3: Primary Actions (Compact on Mobile) */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* FR / EN Language Switcher */}
+          {/* FR / EN / AR Language Switcher */}
           <button
-            onClick={() => setLocale((l) => (l === 'fr' ? 'en' : 'fr'))}
+            onClick={() => setLocale((l) => (l === 'fr' ? 'en' : l === 'en' ? 'ar' : 'fr'))}
             className="px-2 py-1.5 text-xs font-mono-tabular font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors uppercase whitespace-nowrap"
-            title="Switch Language FR / EN"
+            title="Switch Language FR / EN / AR"
           >
             {locale}
           </button>
@@ -445,6 +609,16 @@ export default function App() {
           }`}
         >
           {t.navWorkspace}
+        </button>
+        <button
+          onClick={() => setActiveTab('floor_plan')}
+          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+            activeTab === 'floor_plan'
+              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          {t.navFloorPlan}
         </button>
         <button
           onClick={() => setActiveTab('history')}
@@ -525,7 +699,40 @@ export default function App() {
       )}
 
       {/* Main Content Router */}
-      {activeTab === 'history' ? (
+      {activeTab === 'floor_plan' ? (
+        <FloorPlanEditorView
+          locale={locale}
+          applicantName={
+            values['p1_applicant_name'] ||
+            values['p2_applicant_name'] ||
+            values['p1_company_name'] ||
+            'Demandeur Wilaya d’Oran'
+          }
+          onSyncWithPdfForm={({
+            indoorCamQty,
+            outdoorCamQty,
+            totalCamQty,
+            recorderQty,
+            camTypesSummary,
+            recorderTypeSummary,
+          }) => {
+            pushUndoSnapshot();
+            setValues((prev) => ({
+              ...prev,
+              p3_indoor_cam_qty: indoorCamQty > 0 ? String(indoorCamQty).padStart(2, '0') : '',
+              p3_outdoor_cam_qty: outdoorCamQty > 0 ? String(outdoorCamQty).padStart(2, '0') : '',
+              p3_recorder_qty: recorderQty > 0 ? String(recorderQty).padStart(2, '0') : '',
+              p3_total_qty: totalCamQty > 0 ? String(totalCamQty).padStart(2, '0') : '',
+              p3_tech_cam_type: camTypesSummary,
+              p3_tech_rec_type: recorderTypeSummary,
+            }));
+            setStatusBanner(
+              `Données du Schéma 2D/3D (${totalCamQty} caméras, ${recorderQty} DVR) synchronisées sur la Page 3 du Formulaire DRAG Oran.`
+            );
+            setTimeout(() => setStatusBanner(null), 5000);
+          }}
+        />
+      ) : activeTab === 'history' ? (
         <ObjectBoxHistoryView
           t={t}
           activeDossierId={activeDossierId}
@@ -563,6 +770,7 @@ export default function App() {
       ) : activeTab === 'delete_account' ? (
         <AccountDeletionView
           onPurgeCompleted={() => {
+            pushUndoSnapshot();
             setValues({});
             setActiveDossierId(null);
             setCatalogItems(objectBoxStore.getAllCatalogItems());
@@ -621,6 +829,49 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Undo & Redo Quick Stack Buttons */}
+                  <div className="flex items-center gap-1 border border-slate-200 bg-white rounded-lg p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                        undoStack.length > 0
+                          ? 'text-slate-800 hover:bg-amber-50 hover:text-amber-900'
+                          : 'text-slate-300 cursor-not-allowed'
+                      }`}
+                      title={`${t.btnUndo} — ${undoStack.length} étape(s) mémorisée(s)`}
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Annuler</span>
+                      {undoStack.length > 0 && (
+                        <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded text-[10px] font-bold font-mono">
+                          {undoStack.length}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRedo}
+                      disabled={redoStack.length === 0}
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                        redoStack.length > 0
+                          ? 'text-slate-800 hover:bg-amber-50 hover:text-amber-900'
+                          : 'text-slate-300 cursor-not-allowed'
+                      }`}
+                      title={`${t.btnRedo} — ${redoStack.length} étape(s) à rétablir`}
+                    >
+                      <Redo2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Rétablir</span>
+                      {redoStack.length > 0 && (
+                        <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded text-[10px] font-bold font-mono">
+                          {redoStack.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => handleSaveCurrentDossierToObjectBox(true)}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors whitespace-nowrap"
@@ -630,13 +881,17 @@ export default function App() {
                     <span>+ ObjectBox</span>
                   </button>
                   <button
-                    onClick={() => setValues(SAMPLE_ARABIC_VALUES)}
+                    onClick={() => {
+                      pushUndoSnapshot();
+                      setValues(SAMPLE_ARABIC_VALUES);
+                    }}
                     className="px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors whitespace-nowrap"
                   >
                     {t.btnSampleOran}
                   </button>
                   <button
                     onClick={() => {
+                      pushUndoSnapshot();
                       setValues({});
                       setActiveDossierId(null);
                     }}
@@ -1303,6 +1558,49 @@ export default function App() {
 
               {/* Interactive Overlay & Zoom Controls */}
               <div className="flex flex-wrap items-center gap-2">
+                {/* Undo / Redo buttons on PDF view */}
+                <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    disabled={undoStack.length === 0}
+                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                      undoStack.length > 0
+                        ? 'text-slate-800 hover:bg-white hover:text-amber-900 shadow-2xs'
+                        : 'text-slate-300 cursor-not-allowed'
+                    }`}
+                    title={`${t.btnUndo} (${undoStack.length})`}
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Annuler</span>
+                    {undoStack.length > 0 && (
+                      <span className="px-1 text-[10px] font-bold bg-amber-100 text-amber-900 rounded font-mono">
+                        {undoStack.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRedo}
+                    disabled={redoStack.length === 0}
+                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+                      redoStack.length > 0
+                        ? 'text-slate-800 hover:bg-white hover:text-amber-900 shadow-2xs'
+                        : 'text-slate-300 cursor-not-allowed'
+                    }`}
+                    title={`${t.btnRedo} (${redoStack.length})`}
+                  >
+                    <Redo2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Rétablir</span>
+                    {redoStack.length > 0 && (
+                      <span className="px-1 text-[10px] font-bold bg-amber-100 text-amber-900 rounded font-mono">
+                        {redoStack.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
                 <button
                   onClick={() => setDirectEditOnPdf((v) => !v)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${

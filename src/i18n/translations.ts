@@ -1,8 +1,9 @@
-export type AppLocale = 'fr' | 'en';
+export type AppLocale = 'fr' | 'en' | 'ar';
 
 export interface Translations {
   brandTitle: string;
   navWorkspace: string;
+  navFloorPlan: string;
   navHistory: string;
   navCatalogCrud: string;
   navAnalysis: string;
@@ -52,12 +53,17 @@ export interface Translations {
   btnUpdateChoice: string;
   btnCancelEdit: string;
   btnResetCatalog: string;
+  btnUndo: string;
+  btnRedo: string;
+  undoToast: string;
+  redoToast: string;
 }
 
 export const TRANSLATIONS: Record<AppLocale, Translations> = {
   fr: {
     brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
     navWorkspace: 'Formulaire & PDF',
+    navFloorPlan: 'Schéma & 3D Bâti',
     navHistory: 'Historique ObjectBox',
     navCatalogCrud: 'Listes CRUD (15)',
     navAnalysis: 'Analyse (3 Pages)',
@@ -110,10 +116,15 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     btnUpdateChoice: 'Enregistrer la modification',
     btnCancelEdit: 'Annuler',
     btnResetCatalog: 'Restaurer les valeurs par défaut',
+    btnUndo: 'Annuler (Ctrl+Z)',
+    btnRedo: 'Rétablir (Ctrl+Y)',
+    undoToast: 'Annulation effectuée (état précédent restauré).',
+    redoToast: 'Rétablissement effectué.',
   },
   en: {
     brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
     navWorkspace: 'Form & PDF',
+    navFloorPlan: 'Floor Plan & 3D CCTV',
     navHistory: 'ObjectBox History',
     navCatalogCrud: 'CRUD Lists (15)',
     navAnalysis: '3-Page Analysis',
@@ -122,7 +133,7 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     navDeleteAccount: 'Delete Account',
     uploadOriginalPdf: 'Load Original PDF (.pdf)',
     changeOriginalPdf: 'Change PDF',
-    downloadFilledPdf: 'Exporter en PDF',
+    downloadFilledPdf: 'Export to PDF',
     exportingPdf: 'Exporting PDF...',
     saveToObjectBox: 'Save to ObjectBox',
     savedToObjectBoxToast: 'Dossier saved to ObjectBox database (History updated).',
@@ -166,5 +177,69 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     btnUpdateChoice: 'Update Item',
     btnCancelEdit: 'Cancel',
     btnResetCatalog: 'Reset Default Catalog',
+    btnUndo: 'Undo (Ctrl+Z)',
+    btnRedo: 'Redo (Ctrl+Y)',
+    undoToast: 'Undo performed (previous state restored).',
+    redoToast: 'Redo performed.',
+  },
+  ar: {
+    brandTitle: 'مديرية التنظيم والشؤون العامة · وهران (ObjectBox & Cairo PDF)',
+    navWorkspace: 'الاستمارة وملف PDF',
+    navFloorPlan: 'مخطط البناية وكاميرات 3D',
+    navHistory: 'سجل الملفات ObjectBox',
+    navCatalogCrud: 'قوائم الخيارات (15)',
+    navAnalysis: 'تحليل الاستمارة (3 صفحات)',
+    navFlutterCode: 'كود Flutter & CI',
+    navPrivacyPolicy: 'سياسة الخصوصية',
+    navDeleteAccount: 'حذف الحساب',
+    uploadOriginalPdf: 'تحميل ملف PDF الأصلي (.pdf)',
+    changeOriginalPdf: 'تغيير ملف PDF',
+    downloadFilledPdf: 'تصدير كملف PDF',
+    exportingPdf: 'جارٍ التصدير...',
+    saveToObjectBox: 'حفظ في قاعدة ObjectBox',
+    savedToObjectBoxToast: 'تم حفظ الملف في قاعدة بيانات ObjectBox (تم تحديث السجل).',
+    formPanelTitle: 'الاستمارة باللغة العربية (خط Cairo) وقوائم ObjectBox',
+    fieldsFilledLabel: 'حقول مكتملة',
+    officialModelActive: 'النموذج الرسمي لولاية وهران 1:1',
+    activePdfLabel: 'ملف PDF الحالي:',
+    btnSampleOran: 'نموذج وهران',
+    btnClear: 'مسح',
+    btnCalibrate: 'معايرة',
+    autoSyncLabel: 'مزامنة الحقول المشتركة تلقائياً (الصفحات 1، 2، 3)',
+    marketLabel: 'السوق (1):',
+    marketNational: 'السوق الوطنية (شطب الخارجية)',
+    marketExternal: 'السوق الخارجية (شطب الوطنية)',
+    marketNone: 'بدون شطب إضافي',
+    directEditPdf: 'الكتابة المباشرة على PDF',
+    showBoxes: 'إطارات الحقول',
+    all3PagesView: 'عرض الصفحات الثلاث',
+    chooseFromObjectBox: 'اختيار من قائمة ObjectBox...',
+    manageCrudList: 'إدارة قائمة الخيارات',
+    saveCurrentValueToList: '+ حفظ هذه القيمة في قائمة ObjectBox',
+    historyTitle: 'سجل ملفات ObjectBox (تحميل تدريجي Lazy List)',
+    historySubtitle:
+      'استعلامات مفهرسة ومقسمة إلى صفحات (offset / limit) من جدول DossierSubmissionEntity.',
+    searchHistoryPlaceholder: 'بحث بالاسم، المؤسسة، العنوان أو التاريخ...',
+    loadIntoPdf: 'تطبيق على ملف PDF',
+    duplicateDossier: 'نسخ الملف',
+    deleteDossier: 'حذف',
+    lazyLoadedCount: 'ملفات معروضة من أصل',
+    loadMoreLazy: 'تحميل المزيد (Lazy Load)',
+    allHistoryLoaded: 'تم تحميل جميع الملفات المطابقة لنتائج البحث',
+    emptyHistoryTitle: 'لا توجد ملفات محفوظة في قاعدة ObjectBox',
+    emptyHistoryDesc: 'قم بحفظ الاستمارة الحالية أو تعديل معايير البحث لعرض السجلات.',
+    crudModalTitle: 'مدير قوائم الخيارات Reusable Choices (ObjectBox)',
+    crudModalSubtitle:
+      'إضافة، تعديل أو حذف الخيارات المسبقة (شركات التركيب المعتمدة، الكاميرات، أجهزة التسجيل، البلديات، النقل، الحراسة).',
+    addChoicePlaceholderAr: 'النص بالعربية (يكتب بخط Cairo في ملف PDF)...',
+    addChoicePlaceholderFr: 'وصف أو ملاحظة توضيحية بالفرنسية (اختياري)...',
+    btnAddChoice: 'إضافة إلى ObjectBox',
+    btnUpdateChoice: 'حفظ التعديل',
+    btnCancelEdit: 'إلغاء',
+    btnResetCatalog: 'استعادة القيم الافتراضية',
+    btnUndo: 'تراجع (Ctrl+Z)',
+    btnRedo: 'إعادة (Ctrl+Y)',
+    undoToast: 'تم التراجع (استعادة الحالة السابقة).',
+    redoToast: 'تمت الإعادة.',
   },
 };
