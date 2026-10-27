@@ -60,6 +60,9 @@ import {
   Link2,
   FileText,
   CheckCheck,
+  Lock,
+  Unlock,
+  Minimize2,
 } from 'lucide-react';
 import { AppLocale, TRANSLATIONS } from '../i18n/translations';
 
@@ -197,9 +200,20 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   // Hover state for Eraser tool
   const [hoveredEraseId, setHoveredEraseId] = useState<string | null>(null);
 
-  // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Structure & Devices Layer Locking System
+  const [isStructureLocked, setIsStructureLocked] = useState<boolean>(() => {
+    return plan.isStructureLocked !== undefined ? plan.isStructureLocked : true;
+  });
+  const [isDevicesLocked, setIsDevicesLocked] = useState<boolean>(() => {
+    return plan.isDevicesLocked !== undefined ? plan.isDevicesLocked : false;
+  });
+
+  // Full View & Fullscreen Studio System
+  const [isFullscreenTotalView, setIsFullscreenTotalView] = useState<boolean>(false);
 
   // Undo & Redo History (Snapshots of plan, up to 35 states)
   const [undoStack, setUndoStack] = useState<FloorPlanData[]>([]);

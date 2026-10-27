@@ -85,6 +85,18 @@ export interface Translations {
   navPrevPage: string;
   navNextPage: string;
   planConnectedBadge: string;
+  lockStructure: string;
+  unlockStructure: string;
+  lockDevices: string;
+  unlockDevices: string;
+  btnFitToView: string;
+  btnFullscreen: string;
+  exitFullscreen: string;
+  elementLocked: string;
+  elementUnlocked: string;
+  lockSelectedElement: string;
+  unlockSelectedElement: string;
+  lockedBadgeNotice: string;
 }
 
 export const TRANSLATIONS: Record<AppLocale, Translations> = {
@@ -179,6 +191,18 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     navPrevPage: 'Page Précédente',
     navNextPage: 'Page Suivante',
     planConnectedBadge: 'Câblé avec le Plan 2D/3D',
+    lockStructure: 'Verrouiller le Bâti (Murs & Pièces)',
+    unlockStructure: 'Déverrouiller le Bâti',
+    lockDevices: 'Verrouiller les Équipements',
+    unlockDevices: 'Déverrouiller les Équipements',
+    btnFitToView: 'Plein Vue Totale',
+    btnFullscreen: 'Mode Plein Écran',
+    exitFullscreen: 'Quitter Plein Écran',
+    elementLocked: 'Élément Verrouillé 🔒',
+    elementUnlocked: 'Élément Déverrouillé 🔓',
+    lockSelectedElement: 'Verrouiller cet élément 🔒',
+    unlockSelectedElement: 'Déverrouiller 🔓',
+    lockedBadgeNotice: 'Bâti verrouillé : posez vos caméras et alarmes sans déplacer les murs.',
   },
   en: {
     brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
@@ -271,6 +295,18 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     navPrevPage: 'Previous Page',
     navNextPage: 'Next Page',
     planConnectedBadge: 'Wired to 2D/3D Plan',
+    lockStructure: 'Lock Structure (Walls & Rooms)',
+    unlockStructure: 'Unlock Structure',
+    lockDevices: 'Lock Security Devices',
+    unlockDevices: 'Unlock Devices',
+    btnFitToView: 'Fit Full View',
+    btnFullscreen: 'Fullscreen Mode',
+    exitFullscreen: 'Exit Fullscreen',
+    elementLocked: 'Locked Element 🔒',
+    elementUnlocked: 'Unlocked Element 🔓',
+    lockSelectedElement: 'Lock this Element 🔒',
+    unlockSelectedElement: 'Unlock 🔓',
+    lockedBadgeNotice: 'Structure locked: place cameras and alarms without moving walls.',
   },
   ar: {
     brandTitle: 'مديرية التنظيم والشؤون العامة · وهران (ObjectBox & Cairo PDF)',
@@ -362,5 +398,17 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     navPrevPage: 'الصفحة السابقة',
     navNextPage: 'الصفحة التالية',
     planConnectedBadge: 'مرتبط بالمخطط 2D/3D',
+    lockStructure: 'قفل المخطط المعماري (الجدران والغرف)',
+    unlockStructure: 'فتح قفل المخطط',
+    lockDevices: 'قفل أجهزة المراقبة',
+    unlockDevices: 'فتح قفل الأجهزة',
+    btnFitToView: 'عرض كامل للمخطط',
+    btnFullscreen: 'ملء الشاشة الكامل',
+    exitFullscreen: 'الخروج من ملء الشاشة',
+    elementLocked: 'عنصر مقفول 🔒',
+    elementUnlocked: 'عنصر غير مقفول 🔓',
+    lockSelectedElement: 'قفل هذا العنصر 🔒',
+    unlockSelectedElement: 'إلغاء القفل 🔓',
+    lockedBadgeNotice: 'المخطط مقفول: يمكنك تثبيت الكاميرات وأجهزة الإنذار دون تحريك الجدران.',
   },
 };

@@ -36,6 +36,7 @@ export interface RoomElement {
   height: number; // in meters
   color: string;
   wallHeight: number; // meters (e.g. 2.8)
+  locked?: boolean; // When true, element cannot be dragged or accidentally deleted
 }
 
 export interface DoorElement {
@@ -46,6 +47,7 @@ export interface DoorElement {
   angle: number; // rotation in degrees: 0, 90, 180, 270
   isEmergencyExit: boolean;
   label?: string;
+  locked?: boolean;
 }
 
 export interface GateElement {
@@ -56,6 +58,7 @@ export interface GateElement {
   angle: number; // rotation in degrees: 0, 90, 180, 270
   isMotorized: boolean; // motorized / electric gate
   label?: string;
+  locked?: boolean;
 }
 
 export interface StairElement {
@@ -68,6 +71,7 @@ export interface StairElement {
   angle: number; // rotation in degrees: 0, 90, 180, 270
   direction: 'up' | 'down';
   label?: string;
+  locked?: boolean;
 }
 
 export interface WindowElement {
@@ -76,6 +80,7 @@ export interface WindowElement {
   y: number; // in meters
   width: number; // width in meters (default 1.2)
   angle: number; // rotation in degrees: 0, 90, 180, 270
+  locked?: boolean;
 }
 
 export interface SecurityDeviceElement {
@@ -92,6 +97,7 @@ export interface SecurityDeviceElement {
   isOutdoor: boolean;
   resolution: string; // e.g. "5MP / 4K UHD", "4MP", "2MP Full HD"
   channel?: number;
+  locked?: boolean;
 }
 
 export interface TextAnnotationElement {
@@ -101,6 +107,7 @@ export interface TextAnnotationElement {
   text: string;
   fontSize: number;
   color: string;
+  locked?: boolean;
 }
 
 export interface FloorPlanData {
@@ -115,6 +122,8 @@ export interface FloorPlanData {
   windows: WindowElement[];
   devices: SecurityDeviceElement[];
   annotations: TextAnnotationElement[];
+  isStructureLocked?: boolean; // When true, entire architectural structure is frozen
+  isDevicesLocked?: boolean; // When true, all security devices are frozen
 }
 
 export const PRESET_VILLA_ORAN: FloorPlanData = {
