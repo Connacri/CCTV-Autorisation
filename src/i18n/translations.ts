@@ -65,6 +65,26 @@ export interface Translations {
   aiTabWizard: string;
   aiTabAudit: string;
   aiTabFaq: string;
+  autoSecureToast: string;
+  floorPlanTitle: string;
+  floorPlanSubtitle: string;
+  btnAutoSecure: string;
+  longPressDragHint: string;
+  tapToSelectHint: string;
+  step1Rooms: string;
+  step3Cameras: string;
+  step4Export: string;
+  coveragePercent: string;
+  btnLivePov: string;
+  btnFieldWiring: string;
+  wiringModalTitle: string;
+  wiringModalSubtitle: string;
+  btnApplyWiring: string;
+  btnImportFromForm: string;
+  wiringSuccessToast: string;
+  navPrevPage: string;
+  navNextPage: string;
+  planConnectedBadge: string;
 }
 
 export const TRANSLATIONS: Record<AppLocale, Translations> = {
@@ -136,6 +156,29 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     aiTabWizard: '🪄 Générateur 1 Clic',
     aiTabAudit: '🛡️ Audit Conformité 09-410',
     aiTabFaq: '💡 Guide Débutant DRAG',
+    autoSecureToast: 'Sécurisation automatique appliquée : caméras orientées sur tous les accès.',
+    floorPlanTitle: "Concepteur de Plan & Schéma d'Implantation 2D / 3D",
+    floorPlanSubtitle:
+      "Dessinez les pièces, ouvertures et portails, positionnez caméras, DVR et détecteurs, puis synchronisez automatiquement avec le formulaire officiel DRAG Wilaya d'Oran.",
+    btnAutoSecure: 'Auto-Sécuriser (IA)',
+    longPressDragHint: 'Appui long pour créer ou déplacer un élément',
+    tapToSelectHint: "Clic simple pour sélectionner et régler l'orientation",
+    step1Rooms: '1. Pièces & Murs',
+    step3Cameras: '3. Caméras & NVR',
+    step4Export: '4. Synchroniser & Exporter',
+    coveragePercent: 'Couverture périmétrique',
+    btnLivePov: 'Aperçu Direct CCTV (POV & Zoom)',
+    btnFieldWiring: 'Câblage Champs Formulaire',
+    wiringModalTitle: 'Câblage Automatique & Mappage des Champs (Plan ↔ Formulaire DRAG)',
+    wiringModalSubtitle:
+      'Synchronisation intelligente 1-clic : quantités, modèles conformes sans IR, numéros de série, pièce de stockage du DVR et conditions de sécurité sur les 3 Pages du PDF.',
+    btnApplyWiring: 'Appliquer le Câblage Complet au Formulaire',
+    btnImportFromForm: 'Importer les Équipements du Formulaire',
+    wiringSuccessToast:
+      'Câblage réussi : Tableau des équipements, stockage et sécurité synchronisés sur le Formulaire DRAG.',
+    navPrevPage: 'Page Précédente',
+    navNextPage: 'Page Suivante',
+    planConnectedBadge: 'Câblé avec le Plan 2D/3D',
   },
   en: {
     brandTitle: 'DRAG Wilaya · ObjectBox & Cairo PDF',
@@ -205,6 +248,29 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     aiTabWizard: '🪄 1-Click Wizard',
     aiTabAudit: '🛡️ Compliance Audit',
     aiTabFaq: '💡 Beginner Guide',
+    autoSecureToast: 'Auto-secure applied: cameras strategically placed at all building access points.',
+    floorPlanTitle: 'Floor Plan & 2D / 3D CCTV Layout Designer',
+    floorPlanSubtitle:
+      'Draw rooms, openings, and gates, place cameras, DVRs, and sensors, then automatically synchronize with the official Wilaya of Oran DRAG form.',
+    btnAutoSecure: 'Auto-Secure (AI)',
+    longPressDragHint: 'Long-press to create or move an element',
+    tapToSelectHint: 'Tap to select and adjust orientation',
+    step1Rooms: '1. Rooms & Walls',
+    step3Cameras: '3. Cameras & NVR',
+    step4Export: '4. Sync & Export',
+    coveragePercent: 'Perimeter Coverage',
+    btnLivePov: 'Live CCTV Preview (POV & Zoom)',
+    btnFieldWiring: 'Form Fields Wiring',
+    wiringModalTitle: 'Automatic Wiring & Fields Mapping (Plan ↔ DRAG Form)',
+    wiringModalSubtitle:
+      'Intelligent 1-click sync: quantities, non-IR compliant models, serial numbers, DVR storage room, and security conditions across all 3 PDF pages.',
+    btnApplyWiring: 'Apply Complete Wiring to Form',
+    btnImportFromForm: 'Import Equipment from Form',
+    wiringSuccessToast:
+      'Wiring successful: Equipment table, storage, and security conditions synced to DRAG Form.',
+    navPrevPage: 'Previous Page',
+    navNextPage: 'Next Page',
+    planConnectedBadge: 'Wired to 2D/3D Plan',
   },
   ar: {
     brandTitle: 'مديرية التنظيم والشؤون العامة · وهران (ObjectBox & Cairo PDF)',
@@ -273,5 +339,28 @@ export const TRANSLATIONS: Record<AppLocale, Translations> = {
     aiTabWizard: '🪄 المولد السحري (ضغطة واحدة)',
     aiTabAudit: '🛡️ فحص المطابقة والاشتراطات',
     aiTabFaq: '💡 دليل المبتدئين والإجراءات',
+    autoSecureToast: 'تم التأمين التلقائي: تم توجيه وتوزيع الكاميرات على جميع المداخل والمنافذ.',
+    floorPlanTitle: 'مصمم مخطط المنشأة وتركيب كاميرات المراقبة 2D / 3D',
+    floorPlanSubtitle:
+      'ارسم الغرف والأبواب والبوابات، وحدد مواقع الكاميرات وأجهزة التسجيل، مع مزامنة فورية مع استمارة ولاية وهران الرسمية.',
+    btnAutoSecure: 'تأمين تلقائي ذكي',
+    longPressDragHint: 'اضغط مطولاً لإنشاء أو سحب عنصر',
+    tapToSelectHint: 'نقرة واحدة للتحديد وضبط زاوية الرؤية',
+    step1Rooms: '1. الغرف والجدران',
+    step3Cameras: '3. الكاميرات وجهاز التسجيل',
+    step4Export: '4. مزامنة وتصدير',
+    coveragePercent: 'نسبة تغطية المحيط',
+    btnLivePov: 'معاينة حية للمشهد (POV وزوم)',
+    btnFieldWiring: 'ربط حقول الاستمارة',
+    wiringModalTitle: 'الربط الآلي ومطابقة الحقول (المخطط ↔ استمارة DRAG)',
+    wiringModalSubtitle:
+      'مزامنة ذكية بضغطة زر: الكميات، النماذج المعتمدة بدون أشعة حمراء، الأرقام التسلسلية، غرفة التسجيل وشروط الحفظ عبر الصفحات الثلاث.',
+    btnApplyWiring: 'تطبيق الربط الكامل على الاستمارة',
+    btnImportFromForm: 'استيراد التجهيزات من الاستمارة',
+    wiringSuccessToast:
+      'تم الربط بنجاح: تم تحديث جدول التجهيزات، موقع التخزين واشتراطات الحفظ في الاستمارة.',
+    navPrevPage: 'الصفحة السابقة',
+    navNextPage: 'الصفحة التالية',
+    planConnectedBadge: 'مرتبط بالمخطط 2D/3D',
   },
 };

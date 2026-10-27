@@ -57,10 +57,28 @@ import {
   Monitor,
   Radio,
   Fence,
+  Link2,
+  FileText,
+  CheckCheck,
 } from 'lucide-react';
 import { AppLocale, TRANSLATIONS } from '../i18n/translations';
 
-interface FloorPlanEditorViewProps {
+export interface FloorPlanFullSyncData {
+  indoorCamQty: number;
+  outdoorCamQty: number;
+  totalCamQty: number;
+  recorderQty: number;
+  indoorCamNature: string;
+  outdoorCamNature: string;
+  recorderDesignation: string;
+  recorderNature: string;
+  storageUsePlaces: string;
+  securityConditions: string;
+  camTypesSummary: string;
+  recorderTypeSummary: string;
+}
+
+export interface FloorPlanEditorViewProps {
   locale: AppLocale;
   onSyncWithPdfForm?: (stats: {
     indoorCamQty: number;
@@ -70,12 +88,22 @@ interface FloorPlanEditorViewProps {
     camTypesSummary: string;
     recorderTypeSummary: string;
   }) => void;
+  onSyncAllWithForm?: (fullData: FloorPlanFullSyncData) => void;
+  currentFormValues?: Record<string, string>;
+  plan?: FloorPlanData;
+  onPlanChange?: (newPlan: FloorPlanData) => void;
+  onJumpToWorkspacePage?: (page: 1 | 2 | 3) => void;
   applicantName?: string;
 }
 
 export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   locale,
   onSyncWithPdfForm,
+  onSyncAllWithForm,
+  currentFormValues,
+  plan: controlledPlan,
+  onPlanChange,
+  onJumpToWorkspacePage,
   applicantName = 'Demandeur Wilaya d’Oran',
 }) => {
   const t = TRANSLATIONS[locale];
@@ -84,7 +112,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   // Persistence key
   const STORAGE_KEY = 'cctv_floor_plan_data_v3';
 
-  const [plan, setPlan] = useState<FloorPlanData>(() => {
+  const [internalPlan, setInternalPlan] = useState<FloorPlanData>(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -99,6 +127,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
     return PRESET_VILLA_ORAN;
   });
+
+  const plan = controlledPlan || internalPlan;
+  const setPlan: React.Dispatch<React.SetStateAction<FloorPlanData>> = (action) => {
+    if (typeof action === 'function') {
+      const next = (action as (prev: FloorPlanData) => FloorPlanData)(plan);
+      if (onPlanChange) onPlanChange(next);
+      else setInternalPlan(next);
+    } else {
+      if (onPlanChange) onPlanChange(action);
+      else setInternalPlan(action);
+    }
+  };
 
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [activeTool, setActiveTool] = useState<ToolType>('select');
@@ -126,6 +166,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [simNightMode, setSimNightMode] = useState<boolean>(false);
   const [simDigitalZoom, setSimDigitalZoom] = useState<number>(1);
   const [simTimestamp, setSimTimestamp] = useState<string>('');
+
+  // Field Wiring & Form Synchronization Modal State
+  const [isWiringModalOpen, setIsWiringModalOpen] = useState<boolean>(false);
+  const [activeWiringTab, setActiveWiringTab] = useState<'equipment' | 'security' | 'site'>('equipment');
 
   // Drawing state for 2D canvas (Room creation)
   const [isDrawingRoom, setIsDrawingRoom] = useState(false);
@@ -1121,22 +1165,185 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     showToast(t.autoSecureToast);
   };
 
-  const handleSyncToForm = () => {
-    if (onSyncWithPdfForm) {
-      const camTypesSummary = `${bulletCount} Bullet Ext. (${outdoorCams} Ext / ${indoorCams} Int)${ptzCount > 0 ? ` + ${ptzCount} PTZ 360°` : ''}`;
-      const recorderTypeSummary = `${dvrCount} NVR/DVR 16 Voies`;
-      onSyncWithPdfForm({
-        indoorCamQty: indoorCams,
-        outdoorCamQty: outdoorCams,
-        totalCamQty: totalCams,
-        recorderQty: dvrCount,
-        camTypesSummary,
-        recorderTypeSummary,
-      });
-      showToast(
-        `Synchronisé ! Page 3 du Formulaire DRAG mise à jour : ${totalCams} caméras, ${dvrCount} DVR, ${gateCount} portail(s).`
-      );
+  const getFullSyncPayload = (): FloorPlanFullSyncData => {
+    const indoorQty = indoorCams;
+    const outdoorQty = outdoorCams;
+    const recQty = Math.max(1, dvrCount);
+    const totalEquipment = indoorQty + outdoorQty + recQty;
+
+    const indoorNature =
+      indoorQty > 0
+        ? `كاميرات مراقبة داخلية ثابتة بدون أشعة تحت الحمراء (${indoorQty} كاميرات) طراز HIKVISION DS-2CE56D0T - أرقام: HK-INT-001 إلى HK-INT-${String(
+            indoorQty
+          ).padStart(3, '0')}`
+        : 'لا توجد كاميرات داخلية في المخطط';
+
+    const outdoorNature =
+      outdoorQty > 0
+        ? `كاميرات مراقبة خارجية نهارية بدون أشعة تحت الحمراء (${outdoorQty} كاميرات${
+            ptzCount > 0 ? ` منها ${ptzCount} متحركة PTZ 360°` : ''
+          }) طراز HIKVISION DS-2CE16D0T - أرقام: HK-EXT-001 إلى HK-EXT-${String(
+            outdoorQty
+          ).padStart(3, '0')}`
+        : 'لا توجد كاميرات خارجية في المخطط';
+
+    const recDesignation = `مسجل فيديو رقمي DVR (${recQty} جهاز) 16 قناة (دارة مغلقة CCTV غير موصول بالإنترنت)`;
+    const recNature = `مسجل HIKVISION DVR-7216HQHI-K2 سعة حفظ 30 يوماً - الرقم التسلسلي: SN-98451200`;
+
+    const dvrDev = plan.devices.find((d) => d.type === 'dvr');
+    const dvrRm = dvrDev
+      ? plan.rooms.find(
+          (r) =>
+            dvrDev.x >= r.x &&
+            dvrDev.x <= r.x + r.width &&
+            dvrDev.y >= r.y &&
+            dvrDev.y <= r.y + r.height
+        )
+      : null;
+    const roomName = dvrRm ? dvrRm.nameAr || dvrRm.name : 'الغرفة التقنية المؤمنة';
+    const siteAddr =
+      currentFormValues?.['p3_installation_address'] ||
+      currentFormValues?.['p1_exploitation_address'] ||
+      'نهج العقيد لطفي رقم 24، بلدية وهران';
+
+    const storagePlaces = `مقر المنشأة (${roomName}) - ${siteAddr}`;
+    const securityCond = `خزانة حديدية مصفحة ومغلقة بمفتاح في ${roomName} تحت مسؤولية المسير المباشرة، مع نظام إنذار وغير موصول بشبكة الإنترنت (مدة حفظ التسجيلات 30 يوماً)`;
+
+    const camTypesSummary = `${bulletCount} Bullet Ext. (${outdoorCams} Ext / ${indoorCams} Int)${
+      ptzCount > 0 ? ` + ${ptzCount} PTZ 360°` : ''
+    }`;
+    const recorderTypeSummary = `${recQty} NVR/DVR 16 Voies`;
+
+    return {
+      indoorCamQty: indoorQty,
+      outdoorCamQty: outdoorQty,
+      totalCamQty: totalEquipment,
+      recorderQty: recQty,
+      indoorCamNature: indoorNature,
+      outdoorCamNature: outdoorNature,
+      recorderDesignation: recDesignation,
+      recorderNature: recNature,
+      storageUsePlaces: storagePlaces,
+      securityConditions: securityCond,
+      camTypesSummary,
+      recorderTypeSummary,
+    };
+  };
+
+  const handleApplyWiringToForm = () => {
+    const payload = getFullSyncPayload();
+    if (onSyncAllWithForm) {
+      onSyncAllWithForm(payload);
     }
+    if (onSyncWithPdfForm) {
+      onSyncWithPdfForm({
+        indoorCamQty: payload.indoorCamQty,
+        outdoorCamQty: payload.outdoorCamQty,
+        totalCamQty: payload.indoorCamQty + payload.outdoorCamQty,
+        recorderQty: payload.recorderQty,
+        camTypesSummary: payload.camTypesSummary,
+        recorderTypeSummary: payload.recorderTypeSummary,
+      });
+    }
+    setIsWiringModalOpen(false);
+    showToast(t.wiringSuccessToast);
+  };
+
+  const handleImportEquipmentFromForm = () => {
+    if (!currentFormValues) {
+      showToast('Aucune valeur de formulaire disponible.');
+      return;
+    }
+    const targetIndoor = parseInt((currentFormValues['p3_indoor_cam_qty'] || '0').trim(), 10) || 0;
+    const targetOutdoor = parseInt((currentFormValues['p3_outdoor_cam_qty'] || '0').trim(), 10) || 0;
+    const targetDvr = parseInt((currentFormValues['p3_recorder_qty'] || '1').trim(), 10) || 1;
+
+    recordUndoSnapshot();
+    const newDevs: SecurityDeviceElement[] = [];
+
+    // Keep monitors and alarms
+    plan.devices
+      .filter(
+        (d) => d.type === 'alarm_siren' || d.type === 'monitor_screen' || d.type === 'pir_sensor'
+      )
+      .forEach((d) => newDevs.push(d));
+
+    // Place DVR
+    const safeRoom = plan.rooms[0] || { x: 2, y: 2, width: 4, height: 4 };
+    for (let i = 0; i < targetDvr; i++) {
+      newDevs.push({
+        id: `imported_dvr_${i + 1}`,
+        type: 'dvr',
+        x: Math.round((safeRoom.x + 1.2 + i * 0.8) * 4) / 4,
+        y: Math.round((safeRoom.y + 1.2) * 4) / 4,
+        z: 0.8,
+        rotation: 0,
+        fovAngle: 0,
+        range: 0,
+        label: `DVR-0${i + 1} 16 Voies (${safeRoom.name})`,
+        modelName: 'HIKVISION DVR-7216HQHI-K2',
+        isOutdoor: false,
+        resolution: '16 Ch. 4K HDMI',
+      });
+    }
+
+    // Place outdoor cameras
+    for (let i = 0; i < targetOutdoor; i++) {
+      const g = (plan.gates && plan.gates[i]) || plan.doors[i] || { x: 2 + i * 4, y: 1.5 };
+      newDevs.push({
+        id: `imported_cam_ext_${i + 1}`,
+        type: i === 0 && targetOutdoor > 2 ? 'camera_ptz' : 'camera_bullet',
+        x: Math.round((g.x + 1) * 4) / 4,
+        y: Math.round((g.y + 2) * 4) / 4,
+        z: 2.8,
+        rotation: 270,
+        fovAngle: i === 0 && targetOutdoor > 2 ? 360 : 85,
+        range: 15,
+        label: `CAM-EXT-0${i + 1} Périmètre & Accès`,
+        modelName: 'HIKVISION DS-2CE16D0T',
+        isOutdoor: true,
+        resolution: '5MP Ultra HD',
+        channel: newDevs.length + 1,
+      });
+    }
+
+    // Place indoor cameras
+    for (let i = 0; i < targetIndoor; i++) {
+      const room = plan.rooms[i % Math.max(1, plan.rooms.length)] || {
+        x: 4,
+        y: 6,
+        width: 4,
+        height: 4,
+      };
+      newDevs.push({
+        id: `imported_cam_int_${i + 1}`,
+        type: 'camera_dome',
+        x: Math.round((room.x + room.width / 2 + (i % 2 === 0 ? -0.5 : 0.5)) * 4) / 4,
+        y: Math.round((room.y + room.height / 2 + (i % 2 === 0 ? -0.5 : 0.5)) * 4) / 4,
+        z: 2.5,
+        rotation: (i * 90) % 360,
+        fovAngle: 90,
+        range: 10,
+        label: `CAM-INT-0${i + 1} ${room.name}`,
+        modelName: 'HIKVISION DS-2CE56D0T',
+        isOutdoor: false,
+        resolution: '4MP Dôme Intérieur',
+        channel: newDevs.length + 1,
+      });
+    }
+
+    setPlan((prev) => ({
+      ...prev,
+      devices: newDevs,
+    }));
+    setIsWiringModalOpen(false);
+    showToast(
+      `Configuration importée du Formulaire : ${targetIndoor} caméras intérieures, ${targetOutdoor} extérieures, ${targetDvr} DVR.`
+    );
+  };
+
+  const handleSyncToForm = () => {
+    handleApplyWiringToForm();
   };
 
   // Export Plan to High-Resolution PNG with Cartouche
@@ -1384,6 +1591,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
             <span>{t.btnAutoSecure}</span>
+          </button>
+
+          <button
+            onClick={() => setIsWiringModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg transition-colors cursor-pointer shadow-xs"
+            title="Mappage direct des champs du plan avec les 3 pages du Formulaire DRAG"
+          >
+            <Link2 className="w-3.5 h-3.5 text-emerald-700" />
+            <span>{t.btnFieldWiring}</span>
           </button>
 
           <button
@@ -3509,6 +3725,274 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     {z}x
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Câblage & Mappage des Champs Modal */}
+      {isWiringModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                  <Link2 className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                    <span>{t.wiringModalTitle}</span>
+                    <span className="text-[10px] bg-emerald-700 text-white font-mono px-2 py-0.5 rounded-full font-bold">
+                      Décret 09-410
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-300 line-clamp-1">
+                    {t.wiringModalSubtitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsWiringModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="flex border-b border-slate-200 bg-slate-50 px-4 pt-3 gap-2 overflow-x-auto shrink-0">
+              <button
+                onClick={() => setActiveWiringTab('equipment')}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap cursor-pointer ${
+                  activeWiringTab === 'equipment'
+                    ? 'border-emerald-600 text-emerald-800'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                1. Tableau Équipements Page 3 ({totalCams + Math.max(1, dvrCount)})
+              </button>
+              <button
+                onClick={() => setActiveWiringTab('security')}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap cursor-pointer ${
+                  activeWiringTab === 'security'
+                    ? 'border-emerald-600 text-emerald-800'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                2. Stockage DVR & Sécurité Page 3
+              </button>
+              <button
+                onClick={() => setActiveWiringTab('site')}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap cursor-pointer ${
+                  activeWiringTab === 'site'
+                    ? 'border-emerald-600 text-emerald-800'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                3. Bâti & Périmètre ({plan.rooms.length} pièces, {gateCount} portails)
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+              {(() => {
+                const payload = getFullSyncPayload();
+                return (
+                  <>
+                    {activeWiringTab === 'equipment' && (
+                      <div className="space-y-3">
+                        <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950">
+                          <div>
+                            <span className="font-bold">Tableau Page 3 : </span>
+                            <span>Les caméras et l’enregistreur sont conformes au Décret 09-410 (Section ج Sous-section 01 : matériel sans IR, circuit fermé).</span>
+                          </div>
+                          <span className="px-2 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px] shrink-0 font-mono">
+                            {totalCams + payload.recorderQty} Équipements
+                          </span>
+                        </div>
+
+                        {/* Cards for each wired field */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">Caméras Intérieures (Dômes)</span>
+                              <span className="font-mono font-bold text-xs bg-cyan-100 text-cyan-900 px-2 py-0.5 rounded">
+                                p3_indoor_cam_qty : {String(payload.indoorCamQty).padStart(2, '0')}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-cairo bg-white p-2 rounded border border-slate-200" dir="rtl">
+                              {payload.indoorCamNature}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Actuel dans le Formulaire : <span className="font-mono font-semibold">{currentFormValues?.['p3_indoor_cam_qty'] || '00'}</span>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">Caméras Extérieures (Bullet / PTZ)</span>
+                              <span className="font-mono font-bold text-xs bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded">
+                                p3_outdoor_cam_qty : {String(payload.outdoorCamQty).padStart(2, '0')}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-cairo bg-white p-2 rounded border border-slate-200" dir="rtl">
+                              {payload.outdoorCamNature}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Actuel dans le Formulaire : <span className="font-mono font-semibold">{currentFormValues?.['p3_outdoor_cam_qty'] || '00'}</span>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">Enregistreur Numérique (DVR / NVR)</span>
+                              <span className="font-mono font-bold text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded">
+                                p3_recorder_qty : {String(payload.recorderQty).padStart(2, '0')}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-cairo bg-white p-2 rounded border border-slate-200" dir="rtl">
+                              {payload.recorderNature}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-cairo" dir="rtl">
+                              التعيين : {payload.recorderDesignation}
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">Total Général des Équipements</span>
+                              <span className="font-mono font-bold text-xs bg-slate-800 text-white px-2 py-0.5 rounded">
+                                p3_total_qty : {String(payload.totalCamQty).padStart(2, '0')}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 leading-relaxed">
+                              Somme certifiée des caméras intérieures ({payload.indoorCamQty}) + caméras extérieures ({payload.outdoorCamQty}) + enregistreur ({payload.recorderQty}).
+                            </p>
+                            <div className="text-[10px] text-slate-500">
+                              Actuel dans le Formulaire : <span className="font-mono font-semibold">{currentFormValues?.['p3_total_qty'] || '00'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeWiringTab === 'security' && (
+                      <div className="space-y-3">
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900">Lieu de Stockage et d’Utilisation (Page 3)</span>
+                            <span className="font-mono text-[11px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded">
+                              p3_storage_use_places
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Déduit de la pièce où est positionné l’icône DVR sur le plan 2D/3D.
+                          </p>
+                          <div className="text-xs font-cairo font-semibold text-slate-800 bg-white p-2.5 rounded border border-slate-200" dir="rtl">
+                            {payload.storageUsePlaces}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900">Conditions de Mise en Sécurité en Lieu Sûr (Page 3)</span>
+                            <span className="font-mono text-[11px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded">
+                              p3_security_conditions
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Garantit le respect des exigences DRAG Wilaya d’Oran (armoire métallique fermée, 30 jours de rétention, aucun raccordement Internet).
+                          </p>
+                          <div className="text-xs font-cairo font-semibold text-slate-800 bg-white p-2.5 rounded border border-slate-200" dir="rtl">
+                            {payload.securityConditions}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeWiringTab === 'site' && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                            <div className="text-lg font-bold text-slate-900 font-mono">
+                              {plan.rooms.reduce((acc, r) => acc + r.width * r.height, 0)} m²
+                            </div>
+                            <div className="text-[11px] text-slate-500">Surface totale bâti</div>
+                          </div>
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                            <div className="text-lg font-bold text-slate-900 font-mono">
+                              {plan.rooms.length}
+                            </div>
+                            <div className="text-[11px] text-slate-500">Pièces & Locaux</div>
+                          </div>
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                            <div className="text-lg font-bold text-slate-900 font-mono">
+                              {gateCount}
+                            </div>
+                            <div className="text-[11px] text-slate-500">Portails Véhicules</div>
+                          </div>
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                            <div className="text-lg font-bold text-emerald-700 font-mono">
+                              {siteCoverageScore}%
+                            </div>
+                            <div className="text-[11px] text-slate-500">Couverture Accès</div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                          <span className="font-bold text-slate-900">Locaux répertoriés sur le plan :</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {plan.rooms.map((r) => (
+                              <span key={r.id} className="px-2 py-1 bg-white border border-slate-200 rounded-md text-[11px] text-slate-700">
+                                {r.name} ({r.width * r.height} m²)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleImportEquipmentFromForm}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-colors cursor-pointer shadow-xs"
+                title="Créer automatiquement sur le plan le nombre de caméras configuré dans le formulaire"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>{t.btnImportFromForm}</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                {onJumpToWorkspacePage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsWiringModalOpen(false);
+                      onJumpToWorkspacePage(3);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Aller à la Page 3</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleApplyWiringToForm}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-colors cursor-pointer shadow-md"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  <span>{t.btnApplyWiring}</span>
+                </button>
               </div>
             </div>
           </div>

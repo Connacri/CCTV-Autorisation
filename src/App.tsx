@@ -26,7 +26,8 @@ import { ObjectBoxHistoryView } from './components/ObjectBoxHistoryView';
 import { CrudCatalogView } from './components/CrudCatalogView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { AccountDeletionView } from './components/AccountDeletionView';
-import { FloorPlanEditorView } from './components/FloorPlanEditorView';
+import { FloorPlanEditorView, FloorPlanFullSyncData } from './components/FloorPlanEditorView';
+import { FloorPlanData, PRESET_VILLA_ORAN } from './data/floorPlanSchema';
 import { AiExpertAssistantModal } from './components/AiExpertAssistantModal';
 import {
   Download,
@@ -48,6 +49,14 @@ import {
   Sparkles,
   ShieldCheck,
   Wand2,
+  Link2,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+  Layers,
+  FileText,
+  History,
+  ShieldAlert,
 } from 'lucide-react';
 
 type ActiveTab =
@@ -265,6 +274,136 @@ export default function App() {
     useState<CatalogCategoryKey>('installer_company');
   const [historyRefreshCount, setHistoryRefreshCount] = useState<number>(0);
 
+  // Floor Plan 2D/3D state wired to ObjectBox and PDF Form
+  const [floorPlan, setFloorPlan] = useState<FloorPlanData>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('cctv_floor_plan_data_v3');
+        if (saved) return JSON.parse(saved);
+        const legacy2 = localStorage.getItem('cctv_floor_plan_data_v2');
+        if (legacy2) return JSON.parse(legacy2);
+      } catch (e) {
+        console.error('Erreur chargement plan:', e);
+      }
+    }
+    return PRESET_VILLA_ORAN;
+  });
+
+  const handleSyncAllFromFloorPlan = (syncData: FloorPlanFullSyncData) => {
+    pushUndoSnapshot();
+    setValues((prev) => {
+      const next = { ...prev };
+      if (syncData.indoorCamQty > 0) {
+        next['p3_indoor_cam_qty'] = String(syncData.indoorCamQty).padStart(2, '0');
+      }
+      if (syncData.outdoorCamQty > 0) {
+        next['p3_outdoor_cam_qty'] = String(syncData.outdoorCamQty).padStart(2, '0');
+      }
+      if (syncData.recorderQty > 0) {
+        next['p3_recorder_qty'] = String(syncData.recorderQty).padStart(2, '0');
+      }
+      const total = syncData.indoorCamQty + syncData.outdoorCamQty + syncData.recorderQty;
+      if (total > 0) {
+        next['p3_total_qty'] = String(total).padStart(2, '0');
+      }
+      if (syncData.indoorCamNature) {
+        next['p3_indoor_cam_nature'] = syncData.indoorCamNature;
+      }
+      if (syncData.outdoorCamNature) {
+        next['p3_outdoor_cam_nature'] = syncData.outdoorCamNature;
+      }
+      if (syncData.recorderDesignation) {
+        next['p3_recorder_designation'] = syncData.recorderDesignation;
+      }
+      if (syncData.recorderNature) {
+        next['p3_recorder_nature'] = syncData.recorderNature;
+      }
+      if (syncData.storageUsePlaces) {
+        next['p3_storage_use_places'] = syncData.storageUsePlaces;
+      }
+      if (syncData.securityConditions) {
+        next['p3_security_conditions'] = syncData.securityConditions;
+      }
+      return next;
+    });
+    setStatusBanner(
+      `Câblage complet appliqué : ${syncData.totalCamQty} équipements (Tableau Page 3, Stockage & Conditions de Sécurité) synchronisés avec le Schéma 2D/3D.`
+    );
+    setTimeout(() => setStatusBanner(null), 5500);
+  };
+
+  const handleSyncFromCurrentFloorPlan = () => {
+    const indoorCams = floorPlan.devices.filter(
+      (d) =>
+        (d.type === 'camera_bullet' || d.type === 'camera_dome' || d.type === 'camera_ptz') &&
+        !d.isOutdoor
+    ).length;
+    const outdoorCams = floorPlan.devices.filter(
+      (d) =>
+        (d.type === 'camera_bullet' || d.type === 'camera_dome' || d.type === 'camera_ptz') &&
+        d.isOutdoor
+    ).length;
+    const ptzCount = floorPlan.devices.filter((d) => d.type === 'camera_ptz').length;
+    const dvrCount = floorPlan.devices.filter((d) => d.type === 'dvr').length;
+    const recQty = Math.max(1, dvrCount);
+
+    const indoorNature =
+      indoorCams > 0
+        ? `كاميرات مراقبة داخلية ثابتة بدون أشعة تحت الحمراء (${indoorCams} كاميرات) طراز HIKVISION DS-2CE56D0T - أرقام: HK-INT-001 إلى HK-INT-${String(
+            indoorCams
+          ).padStart(3, '0')}`
+        : 'لا توجد كاميرات داخلية في المخطط';
+
+    const outdoorNature =
+      outdoorCams > 0
+        ? `كاميرات مراقبة خارجية نهارية بدون أشعة تحت الحمراء (${outdoorCams} كاميرات${
+            ptzCount > 0 ? ` منها ${ptzCount} متحركة PTZ 360°` : ''
+          }) طراز HIKVISION DS-2CE16D0T - أرقام: HK-EXT-001 إلى HK-EXT-${String(
+            outdoorCams
+          ).padStart(3, '0')}`
+        : 'لا توجد كاميرات خارجية في المخطط';
+
+    const recDesignation = `مسجل فيديو رقمي DVR (${recQty} جهاز) 16 قناة (دارة مغلقة CCTV غير موصول بالإنترنت)`;
+    const recNature = `مسجل HIKVISION DVR-7216HQHI-K2 سعة حفظ 30 يوماً - الرقم التسلسلي: SN-98451200`;
+
+    const dvrDev = floorPlan.devices.find((d) => d.type === 'dvr');
+    const dvrRm = dvrDev
+      ? floorPlan.rooms.find(
+          (r) =>
+            dvrDev.x >= r.x &&
+            dvrDev.x <= r.x + r.width &&
+            dvrDev.y >= r.y &&
+            dvrDev.y <= r.y + r.height
+        )
+      : null;
+    const roomName = dvrRm ? dvrRm.nameAr || dvrRm.name : 'الغرفة التقنية المؤمنة';
+    const siteAddr =
+      values['p3_installation_address'] ||
+      values['p1_exploitation_address'] ||
+      'نهج العقيد لطفي رقم 24، بلدية وهران';
+
+    const storagePlaces = `مقر المنشأة (${roomName}) - ${siteAddr}`;
+    const securityCond = `خزانة حديدية مصفحة ومغلقة بمفتاح في ${roomName} تحت مسؤولية المسير المباشرة، مع نظام إنذار وغير موصول بشبكة الإنترنت (مدة حفظ التسجيلات 30 يوماً)`;
+
+    const camSummary = `${indoorCams} int. / ${outdoorCams} ext. (${indoorCams + outdoorCams} caméras au total)`;
+    const recSummary = `NVR/DVR 16 Voies (${recQty} unité)`;
+
+    handleSyncAllFromFloorPlan({
+      indoorCamQty: indoorCams,
+      outdoorCamQty: outdoorCams,
+      recorderQty: recQty,
+      totalCamQty: indoorCams + outdoorCams,
+      indoorCamNature: indoorNature,
+      outdoorCamNature: outdoorNature,
+      recorderDesignation: recDesignation,
+      recorderNature: recNature,
+      storageUsePlaces: storagePlaces,
+      securityConditions: securityCond,
+      camTypesSummary: camSummary,
+      recorderTypeSummary: recSummary,
+    });
+  };
+
   // Auto-sync shared fields across Pages 1, 2, 3
   const [autoSync, setAutoSync] = useState<boolean>(true);
   const [showCalibration, setShowCalibration] = useState<boolean>(false);
@@ -348,6 +487,7 @@ export default function App() {
       id: asNew ? undefined : activeDossierId || undefined,
       values,
       marketStrike: overlayOptions.marketStrike,
+      floorPlanData: floorPlan,
     });
     setActiveDossierId(saved.id);
     setHistoryRefreshCount((c) => c + 1);
@@ -363,9 +503,12 @@ export default function App() {
       ...prev,
       marketStrike: dossier.marketStrike,
     }));
+    if (dossier.floorPlanData) {
+      setFloorPlan(dossier.floorPlanData);
+    }
     setActiveTab('workspace');
     setStatusBanner(
-      `Dossier ObjectBox #${dossier.id} (« ${dossier.applicantName} ») chargé sur les 3 pages du PDF.`
+      `Dossier ObjectBox #${dossier.id} (« ${dossier.applicantName} ») et schéma 2D/3D chargés.`
     );
     setTimeout(() => setStatusBanner(null), 4500);
   };
@@ -499,6 +642,21 @@ export default function App() {
   const currentPageFields = fields.filter((f) => f.page === selectedPage);
   const activeFieldObj = fields.find((f) => f.id === activeFieldId) || null;
   const totalFilledCount = fields.filter((f) => (values[f.id] || '').trim().length > 0).length;
+  const page1FilledCount = fields.filter((f) => f.page === 1 && (values[f.id] || '').trim().length > 0).length;
+  const page2FilledCount = fields.filter((f) => f.page === 2 && (values[f.id] || '').trim().length > 0).length;
+  const page3FilledCount = fields.filter((f) => f.page === 3 && (values[f.id] || '').trim().length > 0).length;
+
+  const floorPlanIndoorCamsCount = floorPlan.devices.filter(
+    (d) =>
+      (d.type === 'camera_bullet' || d.type === 'camera_dome' || d.type === 'camera_ptz') &&
+      !d.isOutdoor
+  ).length;
+  const floorPlanOutdoorCamsCount = floorPlan.devices.filter(
+    (d) =>
+      (d.type === 'camera_bullet' || d.type === 'camera_dome' || d.type === 'camera_ptz') &&
+      d.isOutdoor
+  ).length;
+  const floorPlanDvrCount = floorPlan.devices.filter((d) => d.type === 'dvr').length;
 
   return (
     <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden flex flex-col bg-slate-50 text-slate-900">
@@ -674,87 +832,94 @@ export default function App() {
       {/* Responsive Tablet / Mobile Navigation Bar — Zero Horizontal Overflow */}
       <nav
         aria-label="Navigation mobile"
-        className="grid grid-cols-2 sm:flex sm:flex-wrap xl:hidden items-center gap-1.5 bg-white border-b border-slate-200 px-3 py-2 text-xs font-medium w-full max-w-full"
+        className="flex xl:hidden items-center gap-2 bg-white border-b border-slate-200 px-3 py-2 text-xs font-medium w-full max-w-full overflow-x-auto no-scrollbar"
       >
         <button
           onClick={() => setActiveTab('workspace')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'workspace'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navWorkspace}
+          <FileText className="w-4 h-4" />
+          <span>{t.navWorkspace}</span>
         </button>
         <button
           onClick={() => setActiveTab('floor_plan')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'floor_plan'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navFloorPlan}
+          <Layers className="w-4 h-4" />
+          <span>{t.navFloorPlan}</span>
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'history'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navHistory}
+          <History className="w-4 h-4" />
+          <span>{t.navHistory}</span>
         </button>
         <button
           onClick={() => setActiveTab('catalog_crud')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'catalog_crud'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navCatalogCrud}
+          <Database className="w-4 h-4" />
+          <span>{t.navCatalogCrud}</span>
         </button>
         <button
           onClick={() => setActiveTab('analysis')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'analysis'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navAnalysis}
+          <ShieldCheck className="w-4 h-4" />
+          <span>{t.navAnalysis}</span>
         </button>
         <button
           onClick={() => setActiveTab('flutter_code')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'flutter_code'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navFlutterCode}
+          <Sliders className="w-4 h-4" />
+          <span>{t.navFlutterCode}</span>
         </button>
         <button
           onClick={() => setActiveTab('privacy')}
-          className={`px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'privacy'
-              ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200/80'
-              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+              ? 'bg-emerald-700 text-white font-bold shadow-xs'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          {t.navPrivacyPolicy}
+          <ShieldAlert className="w-4 h-4" />
+          <span>{t.navPrivacyPolicy}</span>
         </button>
         <button
           onClick={() => setActiveTab('delete_account')}
-          className={`col-span-2 sm:col-span-1 px-2.5 py-2 rounded-md text-center truncate transition-colors ${
+          className={`shrink-0 min-h-[44px] px-3.5 py-2 rounded-xl flex items-center gap-2 text-center transition-all cursor-pointer ${
             activeTab === 'delete_account'
-              ? 'bg-rose-50 text-rose-800 font-semibold border border-rose-200'
-              : 'bg-rose-50/50 text-rose-700 hover:bg-rose-100/70'
+              ? 'bg-rose-700 text-white font-bold shadow-xs'
+              : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
           }`}
         >
-          {t.navDeleteAccount}
+          <span>{t.navDeleteAccount}</span>
         </button>
       </nav>
 
@@ -778,6 +943,14 @@ export default function App() {
       {activeTab === 'floor_plan' ? (
         <FloorPlanEditorView
           locale={locale}
+          plan={floorPlan}
+          onPlanChange={setFloorPlan}
+          currentFormValues={values}
+          onSyncAllWithForm={handleSyncAllFromFloorPlan}
+          onJumpToWorkspacePage={(pg) => {
+            setSelectedPage(pg);
+            setActiveTab('workspace');
+          }}
           applicantName={
             values['p1_applicant_name'] ||
             values['p2_applicant_name'] ||
@@ -789,8 +962,6 @@ export default function App() {
             outdoorCamQty,
             totalCamQty,
             recorderQty,
-            camTypesSummary,
-            recorderTypeSummary,
           }) => {
             pushUndoSnapshot();
             setValues((prev) => ({
@@ -799,8 +970,6 @@ export default function App() {
               p3_outdoor_cam_qty: outdoorCamQty > 0 ? String(outdoorCamQty).padStart(2, '0') : '',
               p3_recorder_qty: recorderQty > 0 ? String(recorderQty).padStart(2, '0') : '',
               p3_total_qty: totalCamQty > 0 ? String(totalCamQty).padStart(2, '0') : '',
-              p3_tech_cam_type: camTypesSummary,
-              p3_tech_rec_type: recorderTypeSummary,
             }));
             setStatusBanner(
               `Données du Schéma 2D/3D (${totalCamQty} caméras, ${recorderQty} DVR) synchronisées sur la Page 3 du Formulaire DRAG Oran.`
@@ -859,27 +1028,41 @@ export default function App() {
       ) : (
         /* WORKSPACE VIEW: Responsive Split Form Editor + Live 1:1 PDF Canvas */
         <main className="flex-1 flex flex-col lg:grid lg:grid-cols-12 min-h-[calc(100vh-57px)]">
-          {/* Mobile Form / PDF Switcher */}
-          <div className="flex lg:hidden items-center gap-2 p-2 bg-slate-100 border-b border-slate-200">
+          {/* Mobile Form / PDF Switcher — Fitts's Law Touch Targets (min 48px) & Figure-Ground Contrast */}
+          <div className="flex lg:hidden items-center gap-2 p-2 bg-slate-100/95 border-b border-slate-200 sticky top-[57px] z-20 backdrop-blur-sm">
             <button
+              type="button"
               onClick={() => setMobileWorkspacePane('form')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              className={`flex-1 min-h-[48px] px-3 py-2 flex items-center justify-center gap-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer ${
                 mobileWorkspacePane === 'form'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600'
+                  ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
               }`}
             >
-              1. Formulaire & Listes ObjectBox
+              <FileText className={`w-4 h-4 shrink-0 ${mobileWorkspacePane === 'form' ? 'text-white' : 'text-emerald-700'}`} />
+              <div className="flex flex-col items-start leading-tight">
+                <span>1. Formulaire DRAG</span>
+                <span className={`text-[10px] font-normal ${mobileWorkspacePane === 'form' ? 'text-emerald-100' : 'text-slate-500'}`}>
+                  {totalFilledCount} / {fields.length} champs remplis
+                </span>
+              </div>
             </button>
             <button
+              type="button"
               onClick={() => setMobileWorkspacePane('pdf')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              className={`flex-1 min-h-[48px] px-3 py-2 flex items-center justify-center gap-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer ${
                 mobileWorkspacePane === 'pdf'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600'
+                  ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
               }`}
             >
-              2. Aperçu Direct sur PDF (Cairo)
+              <Eye className={`w-4 h-4 shrink-0 ${mobileWorkspacePane === 'pdf' ? 'text-white' : 'text-emerald-700'}`} />
+              <div className="flex flex-col items-start leading-tight">
+                <span>2. Aperçu PDF</span>
+                <span className={`text-[10px] font-normal ${mobileWorkspacePane === 'pdf' ? 'text-emerald-100' : 'text-slate-500'}`}>
+                  Page {selectedPage} / 3 (Police Cairo)
+                </span>
+              </div>
             </button>
           </div>
 
@@ -890,8 +1073,8 @@ export default function App() {
             } lg:col-span-5 xl:col-span-5 bg-white border-r border-slate-200 flex-col lg:h-[calc(100vh-57px)]`}
           >
             {/* Form Top Controls */}
-            <div className="p-4 border-b border-slate-200 space-y-3 bg-slate-50/60">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="p-3.5 sm:p-4 border-b border-slate-200 space-y-3 bg-slate-50/60">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
                   <h1 className="text-sm font-bold text-slate-900">
                     {t.formPanelTitle}
@@ -904,24 +1087,25 @@ export default function App() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1.5">
+                {/* Quick Actions Strip: Horizontal scrollable on mobile (Fitts's Law touch targets) */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
                   {/* Undo & Redo Quick Stack Buttons */}
-                  <div className="flex items-center gap-1 border border-slate-200 bg-white rounded-lg p-0.5 shadow-2xs">
+                  <div className="flex items-center gap-1 border border-slate-200 bg-white rounded-lg p-0.5 shadow-2xs shrink-0">
                     <button
                       type="button"
                       onClick={handleUndo}
                       disabled={undoStack.length === 0}
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                      className={`min-h-[38px] inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                         undoStack.length > 0
                           ? 'text-slate-800 hover:bg-amber-50 hover:text-amber-900'
                           : 'text-slate-300 cursor-not-allowed'
                       }`}
                       title={`${t.btnUndo} — ${undoStack.length} étape(s) mémorisée(s)`}
                     >
-                      <Undo2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Annuler</span>
+                      <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Annuler</span>
                       {undoStack.length > 0 && (
-                        <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded text-[10px] font-bold font-mono">
+                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold font-mono">
                           {undoStack.length}
                         </span>
                       )}
@@ -931,17 +1115,17 @@ export default function App() {
                       type="button"
                       onClick={handleRedo}
                       disabled={redoStack.length === 0}
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                      className={`min-h-[38px] inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                         redoStack.length > 0
                           ? 'text-slate-800 hover:bg-amber-50 hover:text-amber-900'
                           : 'text-slate-300 cursor-not-allowed'
                       }`}
                       title={`${t.btnRedo} — ${redoStack.length} étape(s) à rétablir`}
                     >
-                      <Redo2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Rétablir</span>
+                      <Redo2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Rétablir</span>
                       {redoStack.length > 0 && (
-                        <span className="px-1 py-0.2 bg-amber-100 text-amber-900 rounded text-[10px] font-bold font-mono">
+                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold font-mono">
                           {redoStack.length}
                         </span>
                       )}
@@ -954,56 +1138,60 @@ export default function App() {
                       setAiModalTab('wizard');
                       setIsAiModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-md transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+                    className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer shadow-2xs shrink-0"
                     title="Assistant Expert IA : Remplir tout le dossier en 1 clic (Décret 09-410)"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                     <span>✨ 1-Clic IA</span>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => handleSaveCurrentDossierToObjectBox(true)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors whitespace-nowrap"
+                    className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-2xs"
                     title="Enregistrer ce dossier dans l'historique ObjectBox"
                   >
-                    <Database className="w-3.5 h-3.5" />
+                    <Database className="w-3.5 h-3.5 shrink-0" />
                     <span>+ ObjectBox</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       pushUndoSnapshot();
                       setValues(SAMPLE_ARABIC_VALUES);
                     }}
-                    className="px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors whitespace-nowrap"
+                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     {t.btnSampleOran}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       pushUndoSnapshot();
                       setValues({});
                       setActiveDossierId(null);
                     }}
-                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap"
+                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     {t.btnClear}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setShowCalibration((v) => !v)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                    className={`min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                       showCalibration
                         ? 'bg-slate-900 text-white'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    <Sliders className="w-3.5 h-3.5" />
+                    <Sliders className="w-3.5 h-3.5 shrink-0" />
                     <span>{t.btnCalibrate}</span>
                   </button>
                 </div>
               </div>
 
               {/* Quick 69-Wilaya Selector + Add New Wilaya CRUD */}
-              <div className="p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="font-semibold text-emerald-950 whitespace-nowrap">
                   الولاية (Pages 1, 2, 3) :
                 </span>
@@ -1011,7 +1199,7 @@ export default function App() {
                   <select
                     value={values['p1_wilaya'] || 'ولاية وهران'}
                     onChange={(e) => handleUpdateValue('p1_wilaya', e.target.value)}
-                    className="flex-1 min-w-0 border border-emerald-300 bg-white text-slate-900 rounded-md px-2.5 py-1.5 font-amiri font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    className="flex-1 min-w-0 border border-emerald-300 bg-white text-slate-900 rounded-lg px-2.5 py-2 font-amiri font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                   >
                     {catalogItems
                       .filter((c) => c.categoryKey === 'wilaya')
@@ -1027,7 +1215,7 @@ export default function App() {
                       setFocusedCatalogCategory('wilaya');
                       setActiveTab('catalog_crud');
                     }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors whitespace-nowrap shrink-0"
+                    className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                     title="Ajouter une nouvelle Wilaya ou gérer les 69 Wilayas dans ObjectBox"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -1036,38 +1224,52 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Page Selector Tabs (Page 1, Page 2, Page 3) */}
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/70 rounded-lg">
-                <button
-                  onClick={() => setSelectedPage(1)}
-                  className={`py-1.5 px-2 rounded-md text-xs font-medium transition-colors whitespace-nowrap truncate ${
-                    selectedPage === 1
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Page 1 · التعهد (5)
-                </button>
-                <button
-                  onClick={() => setSelectedPage(2)}
-                  className={`py-1.5 px-2 rounded-md text-xs font-medium transition-colors whitespace-nowrap truncate ${
-                    selectedPage === 2
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Page 2 · الاستمارة (23)
-                </button>
-                <button
-                  onClick={() => setSelectedPage(3)}
-                  className={`py-1.5 px-2 rounded-md text-xs font-medium transition-colors whitespace-nowrap truncate ${
-                    selectedPage === 3
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Page 3 · التجهيزات (24)
-                </button>
+              {/* Page Selector Tabs (Page 1, Page 2, Page 3) — Fitts's Law Touch Targets (min 48px) & Gestalt Closure */}
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 bg-slate-200/80 rounded-xl">
+                {[
+                  { pg: 1 as const, labelAr: 'التعهد', total: 5, filled: page1FilledCount },
+                  { pg: 2 as const, labelAr: 'الاستمارة', total: 23, filled: page2FilledCount },
+                  { pg: 3 as const, labelAr: 'التجهيزات', total: 24, filled: page3FilledCount },
+                ].map(({ pg, labelAr, total, filled }) => {
+                  const isActive = selectedPage === pg;
+                  return (
+                    <button
+                      key={pg}
+                      type="button"
+                      onClick={() => setSelectedPage(pg)}
+                      className={`min-h-[48px] py-1.5 px-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-white text-emerald-950 font-bold shadow-xs ring-1 ring-emerald-500/30'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1 text-xs">
+                        <span
+                          className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            isActive ? 'bg-emerald-700 text-white' : 'bg-slate-300 text-slate-700'
+                          }`}
+                        >
+                          {pg}
+                        </span>
+                        <span className="font-semibold">Page {pg}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span dir="rtl" className="font-cairo text-[11px] font-bold text-slate-800">
+                          {labelAr}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono px-1 rounded ${
+                            filled === total
+                              ? 'bg-emerald-100 text-emerald-800 font-bold'
+                              : 'text-slate-500 bg-slate-100'
+                          }`}
+                        >
+                          {filled}/{total}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Auto-sync & Market Strike quick bar (always visible from the form) */}
@@ -1260,11 +1462,65 @@ export default function App() {
             </div>
 
             {/* Scrollable Form Fields for Current Page */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5">
+              {/* Dedicated Floor Plan Wiring Card on Page 3 (Câblage Intelligent Plan 2D/3D <-> Page 3) */}
+              {selectedPage === 3 && (
+                <div className="p-3.5 rounded-xl border-2 border-emerald-500/80 bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white shadow-xs space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h2 className="text-xs sm:text-sm font-bold text-emerald-950">
+                          Câblage Intelligent avec le Plan 2D/3D
+                        </h2>
+                        <p className="text-[11px] text-emerald-800 font-medium">
+                          {floorPlan.devices.length > 0 ? (
+                            <>
+                              Détecté sur le plan : {floorPlanIndoorCamsCount} int., {floorPlanOutdoorCamsCount} ext., {Math.max(1, floorPlanDvrCount)} DVR
+                            </>
+                          ) : (
+                            'Aucun équipement encore placé sur le schéma'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <span dir="rtl" className="font-cairo font-bold text-xs text-emerald-900 shrink-0">
+                      الربط مع المخطط
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Synchronisez en 1 clic le tableau officiel Page 3 (quantités, désignation, nature), le local de stockage du DVR et les conditions de sécurité à partir de votre schéma 2D/3D.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSyncFromCurrentFloorPlan}
+                      className="min-h-[42px] px-3.5 py-2 inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-xs transition-all cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                      <span>⚡ Appliquer le Câblage du Plan</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('floor_plan')}
+                      className="min-h-[42px] px-3 py-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 bg-white hover:bg-emerald-100/70 border border-emerald-300 rounded-lg transition-all cursor-pointer"
+                    >
+                      <Link2 className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Ouvrir l'Éditeur de Plan 2D/3D</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Dedicated Market Strikethrough Card on Page 3 ("اشطب العبارة المستغنى عنها") */}
               {selectedPage === 3 && (
-                <div className="p-3 rounded-lg border border-emerald-300 bg-emerald-50/40 space-y-2">
-                  <div className="flex items-baseline justify-between gap-2">
+                <div className="p-3.5 rounded-xl border border-emerald-300 bg-emerald-50/40 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-2">
                     <span className="text-xs font-semibold text-emerald-950">
                       Choix du Marché — Mention à barrer sur le PDF (Renvoi 1)
                     </span>
@@ -1281,7 +1537,7 @@ export default function App() {
                           marketStrike: 'strike_external',
                         }))
                       }
-                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                      className={`min-h-[44px] py-2 px-2 rounded-lg border font-cairo font-semibold transition-colors text-center cursor-pointer ${
                         overlayOptions.marketStrike === 'strike_external'
                           ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -1299,7 +1555,7 @@ export default function App() {
                           marketStrike: 'strike_national',
                         }))
                       }
-                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                      className={`min-h-[44px] py-2 px-2 rounded-lg border font-cairo font-semibold transition-colors text-center cursor-pointer ${
                         overlayOptions.marketStrike === 'strike_national'
                           ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -1317,7 +1573,7 @@ export default function App() {
                           marketStrike: 'strike_both',
                         }))
                       }
-                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                      className={`min-h-[44px] py-2 px-2 rounded-lg border font-cairo font-semibold transition-colors text-center cursor-pointer ${
                         overlayOptions.marketStrike === 'strike_both'
                           ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -1337,7 +1593,7 @@ export default function App() {
                           marketStrike: 'none',
                         }))
                       }
-                      className={`py-2 px-2 rounded-md border font-cairo font-semibold transition-colors text-center ${
+                      className={`min-h-[44px] py-2 px-2 rounded-lg border font-cairo font-semibold transition-colors text-center cursor-pointer ${
                         overlayOptions.marketStrike === 'none'
                           ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -1374,7 +1630,7 @@ export default function App() {
                   return (
                     <React.Fragment key={field.id}>
                       {showSectionHeader && (
-                        <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between gap-2 flex-nowrap">
+                        <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between gap-2">
                           <span className="text-[11px] text-slate-400 whitespace-nowrap shrink-0">
                             Police Cairo & Amiri · {field.dir.toUpperCase()}
                           </span>
@@ -1393,20 +1649,20 @@ export default function App() {
                           fieldRefs.current['p3_ref_year'] = el;
                         }}
                         onClick={() => setActiveFieldId('p3_ref_number')}
-                        className={`p-3 rounded-lg border transition-colors ${
+                        className={`p-3.5 rounded-xl border transition-all ${
                           isSelected
-                            ? 'border-emerald-600 bg-emerald-50/30'
+                            ? 'border-emerald-600 bg-emerald-50/30 ring-2 ring-emerald-500/20 shadow-xs'
                             : 'border-slate-200 bg-white hover:border-slate-300'
                         }`}
                       >
-                        {/* French and Arabic labels aligned on the exact same line */}
-                        <div className="flex items-center justify-between gap-2 mb-2 flex-nowrap">
-                          <span className="text-xs font-medium text-slate-600 truncate">
+                        {/* French and Arabic labels responsive wrapping */}
+                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-2 mb-2">
+                          <span className="text-xs font-semibold text-slate-700 leading-snug">
                             N° & Année d’enregistrement (Police d’origine)
                           </span>
                           <label
                             dir="rtl"
-                            className="font-amiri font-bold text-sm text-slate-900 whitespace-nowrap shrink-0"
+                            className="font-amiri font-bold text-sm sm:text-base text-slate-900 leading-snug"
                           >
                             رقم التسجيل والسنة (رقم / 142 ... / 2020)
                           </label>
@@ -1415,7 +1671,7 @@ export default function App() {
                         {/* Single-line inline reference editor using the original Amiri font */}
                         <div
                           dir="rtl"
-                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-slate-50 border border-slate-200 font-amiri font-bold text-base text-slate-900 overflow-x-auto whitespace-nowrap"
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 font-amiri font-bold text-base text-slate-900 overflow-x-auto whitespace-nowrap"
                         >
                           <span className="shrink-0 leading-none">رقم /</span>
                           <input
@@ -1430,7 +1686,7 @@ export default function App() {
                             onChange={(e) => handleUpdateValue('p3_ref_number', e.target.value)}
                             placeholder="142"
                             aria-label="Numéro d'enregistrement (142)"
-                            className="w-16 px-1.5 py-0.5 text-center font-amiri font-bold text-base leading-none text-slate-900 bg-white border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
+                            className="w-16 px-2 py-1.5 text-center font-amiri font-bold text-base leading-none text-slate-900 bg-white border border-slate-300 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
                           />
                           <span className="shrink-0 leading-none">
                             م ت ش ع / م ت ع / م ت ا م م /
@@ -1447,7 +1703,7 @@ export default function App() {
                             onChange={(e) => handleUpdateValue('p3_ref_year', e.target.value)}
                             placeholder="2020"
                             aria-label="Année d'enregistrement (2020)"
-                            className="w-20 px-1.5 py-0.5 text-center font-amiri font-bold text-base leading-none text-slate-900 bg-white border border-slate-300 rounded focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
+                            className="w-20 px-2 py-1.5 text-center font-amiri font-bold text-base leading-none text-slate-900 bg-white border border-slate-300 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 shrink-0"
                           />
                         </div>
                       </div>
@@ -1467,7 +1723,7 @@ export default function App() {
                 return (
                   <React.Fragment key={field.id}>
                     {showSectionHeader && (
-                      <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between gap-2 flex-nowrap">
+                      <div className="pt-2 pb-1 border-b border-slate-200 flex items-center justify-between gap-2">
                         <span className="text-[11px] text-slate-400 whitespace-nowrap shrink-0">
                           Police Cairo · {field.dir.toUpperCase()}
                         </span>
@@ -1485,15 +1741,16 @@ export default function App() {
                         fieldRefs.current[field.id] = el;
                       }}
                       onClick={() => setActiveFieldId(field.id)}
-                      className={`p-3 rounded-lg border transition-colors ${
+                      className={`p-3.5 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-emerald-600 bg-emerald-50/30'
+                          ? 'border-emerald-600 bg-emerald-50/30 ring-2 ring-emerald-500/20 shadow-xs'
                           : 'border-slate-200 bg-white hover:border-slate-300'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2 mb-1.5 flex-nowrap">
+                      {/* Responsive Labels: stacked naturally on phones, side-by-side on tablet/desktop */}
+                      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-2 mb-2">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-xs font-medium text-slate-600 truncate">
+                          <span className="text-xs font-semibold text-slate-700 leading-snug">
                             {field.labelFr}
                           </span>
                           {(field.multiline ||
@@ -1520,9 +1777,9 @@ export default function App() {
                           dir="rtl"
                           className={`${
                             field.syncKey === 'wilaya_header'
-                              ? 'font-amiri'
-                              : 'font-cairo'
-                          } font-bold text-sm text-slate-900 whitespace-nowrap shrink-0`}
+                              ? 'font-amiri text-base sm:text-lg'
+                              : 'font-cairo text-sm sm:text-base'
+                          } font-bold text-slate-900 leading-snug`}
                         >
                           {field.labelAr}
                         </label>
@@ -1539,9 +1796,9 @@ export default function App() {
                                   handleUpdateValue(field.id, e.target.value);
                                 }
                               }}
-                              className={`flex-1 min-w-0 text-xs border border-emerald-200 bg-emerald-50/50 text-slate-800 rounded-md px-2.5 py-1.5 ${
+                              className={`flex-1 min-w-0 text-xs sm:text-sm border border-emerald-200 bg-emerald-50/50 text-slate-800 rounded-lg px-2.5 py-2 ${
                                 field.syncKey === 'wilaya_header'
-                                  ? 'font-amiri font-bold text-sm'
+                                  ? 'font-amiri font-bold text-base'
                                   : 'font-cairo font-semibold'
                               } focus:outline-none focus:ring-2 focus:ring-emerald-600`}
                             >
@@ -1562,7 +1819,7 @@ export default function App() {
                                 setFocusedCatalogCategory(field.catalogCategory!);
                                 setActiveTab('catalog_crud');
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200/80 rounded-md transition-colors whitespace-nowrap shrink-0"
+                              className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200/80 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                               title={t.manageCrudList}
                             >
                               <Settings2 className="w-3.5 h-3.5" />
@@ -1587,6 +1844,7 @@ export default function App() {
                         </div>
                       )}
 
+                      {/* Inputs with text-base on mobile to prevent iOS Safari auto-zoom, and sm:text-sm on desktop */}
                       {field.multiline ? (
                         <textarea
                           dir={field.dir}
@@ -1595,7 +1853,7 @@ export default function App() {
                           onFocus={() => setActiveFieldId(field.id)}
                           onChange={(e) => handleUpdateValue(field.id, e.target.value)}
                           placeholder={field.placeholderAr}
-                          className="w-full px-3 py-1.5 text-sm font-cairo font-semibold text-center text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                          className="w-full px-3 py-2.5 text-base sm:text-sm font-cairo font-semibold text-center text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 transition-colors"
                         />
                       ) : (
                         <input
@@ -1605,11 +1863,11 @@ export default function App() {
                           onFocus={() => setActiveFieldId(field.id)}
                           onChange={(e) => handleUpdateValue(field.id, e.target.value)}
                           placeholder={field.placeholderAr}
-                          className={`w-full px-3 py-1.5 text-sm ${
+                          className={`w-full px-3 py-2.5 text-base sm:text-sm ${
                             field.syncKey === 'wilaya_header'
-                              ? 'font-amiri font-bold text-base'
+                              ? 'font-amiri font-bold text-lg sm:text-base'
                               : 'font-cairo font-semibold'
-                          } text-center text-slate-900 bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600`}
+                          } text-center text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 transition-colors`}
                         />
                       )}
 
@@ -1625,6 +1883,65 @@ export default function App() {
                   </React.Fragment>
                 );
               })}
+            </div>
+
+            {/* Sticky Bottom Thumb Zone Navigation Bar (Fitts's Law & Mobile Ergonomics) */}
+            <div className="sticky bottom-0 z-10 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center justify-between gap-2 shadow-lg">
+              <button
+                type="button"
+                onClick={() => setSelectedPage((p) => Math.max(1, p - 1) as 1 | 2 | 3)}
+                disabled={selectedPage === 1}
+                className={`min-h-[44px] px-3.5 py-2 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors cursor-pointer ${
+                  selectedPage > 1
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                    : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>{t.navPrevPage}</span>
+              </button>
+
+              {/* Center Page Indicators */}
+              <div className="flex items-center gap-1.5">
+                {([1, 2, 3] as const).map((pg) => (
+                  <button
+                    key={pg}
+                    type="button"
+                    onClick={() => setSelectedPage(pg)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
+                      selectedPage === pg
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                ))}
+              </div>
+
+              {selectedPage < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedPage((p) => Math.min(3, p + 1) as 1 | 2 | 3)}
+                  className="min-h-[44px] px-3.5 py-2 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors cursor-pointer"
+                >
+                  <span>{t.navNextPage}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileWorkspacePane('pdf');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="min-h-[44px] px-3.5 py-2 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors cursor-pointer"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span className="hidden sm:inline">Aperçu PDF (Cairo)</span>
+                  <span className="sm:hidden">Aperçu PDF</span>
+                </button>
+              )}
             </div>
           </section>
 

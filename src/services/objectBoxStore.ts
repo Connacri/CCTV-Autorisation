@@ -20,6 +20,7 @@ export interface DossierSubmissionEntity {
   totalQty: string;
   marketStrike: MarketStrikeOption;
   values: Record<string, string>;
+  floorPlanData?: any;
 }
 
 /**
@@ -659,6 +660,7 @@ class ObjectBoxDatabaseService {
     id?: number;
     values: Record<string, string>;
     marketStrike: MarketStrikeOption;
+    floorPlanData?: any;
   }): DossierSubmissionEntity {
     const list = this.loadDossiersFromStorage();
     const now = new Date().toISOString();
@@ -695,6 +697,7 @@ class ObjectBoxDatabaseService {
           totalQty,
           marketStrike: params.marketStrike,
           values: { ...params.values },
+          floorPlanData: params.floorPlanData !== undefined ? params.floorPlanData : list[idx].floorPlanData,
         };
         list[idx] = updated;
         this.saveDossiersToStorage(list);
@@ -715,6 +718,7 @@ class ObjectBoxDatabaseService {
       totalQty,
       marketStrike: params.marketStrike,
       values: { ...params.values },
+      floorPlanData: params.floorPlanData,
     };
     list.unshift(created);
     this.saveDossiersToStorage(list);
