@@ -5,7 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: process.env.VITE_BASE || '/',
+    // Relative base keeps assets working when served from a subpath
+    // (e.g. https://connacri.github.io/CCTV-Autorisation/ on GitHub Pages).
+    base: process.env.VITE_BASE || './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

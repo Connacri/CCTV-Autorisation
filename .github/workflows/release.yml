@@ -24,6 +24,7 @@ jobs:
   build-web:
     name: Build & Validate Web (React + Cairo PDF + ObjectBox)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       release_tag: ${{ steps.version.outputs.tag }}
     steps:
@@ -44,8 +45,14 @@ jobs:
         run: npm run lint
 
       - name: Build production Web bundle (with relative base './' for /CCTV-Autorisation/)
+        env:
+          VITE_BASE: ./
         run: |
           npm run build
+          if grep -Eq '(src|href)="/(assets|favicon)' dist/index.html; then
+            echo "::error::dist/index.html uses absolute asset paths; GitHub Pages subpath would be blank"
+            exit 1
+          fi
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
 
@@ -76,7 +83,6 @@ jobs:
 
       - name: Publish ./dist to gh-pages branch (for branch-based GitHub Pages)
         if: github.ref == 'refs/heads/main'
-        continue-on-error: true
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -85,14 +91,12 @@ jobs:
 
       - name: Configure GitHub Pages
         if: github.ref == 'refs/heads/main'
-        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/main'
-        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
@@ -104,8 +108,8 @@ jobs:
     name: Deploy Live Web to GitHub Pages
     needs: build-web
     if: github.ref == 'refs/heads/main'
-    continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -120,6 +124,7 @@ jobs:
   build-android:
     name: Build & Sign Android Release (APK & AAB)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: flutter_app
@@ -136,6 +141,9 @@ jobs:
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
+          # Pin a known-good stable release: Flutter 3.50 deprecates
+          # package:flutter/material.dart, which this app still uses.
+          flutter-version: '3.47.8'
           channel: 'stable'
           cache: true
 
@@ -212,6 +220,7 @@ jobs:
     name: Publish Versioned GitHub Release
     needs: [build-web, build-android]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

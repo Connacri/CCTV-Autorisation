@@ -70,3 +70,7 @@ Le fichier `.github/workflows/release.yml` exécute automatiquement à chaque pu
 2. Déploiement automatique sur **GitHub Pages** (incluant `/privacy.html`).
 3. Compilation et signature Android (`app-release.apk` et `app-release.aab`) du projet commité `flutter_app/` via les secrets GitHub (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`), avec vérification apksigner.
 4. Publication d'une **Release GitHub versionnée (`v1.0.x`)** avec `web-build.zip`, `app-release.apk` et `app-release.aab`.
+
+Notes de build :
+- Le bundle Web est généré avec `VITE_BASE=./` afin que les assets fonctionnent sous le sous-chemin GitHub Pages (`/CCTV-Autorisation/`).
+- Flutter est épinglé à `3.47.8` dans le workflow, car Flutter 3.50 déprécie `package:flutter/material.dart` encore utilisé par l'application.

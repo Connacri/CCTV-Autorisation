@@ -28,6 +28,12 @@ dev_dependencies:
   build_runner: ^2.15.1
   objectbox_generator: ^5.3.2
 
+dependency_overrides:
+  # image >= 4.11.0 calls ZLibDecoder.decodeLazy(), which is not available
+  # in the Dart SDK shipped with the stable Flutter used by CI. Pin the last
+  # known-good release until the upstream package fixes its SDK constraint.
+  image: 4.10.2
+
 flutter:
   uses-material-design: true
   assets:
