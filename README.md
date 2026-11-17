@@ -73,4 +73,4 @@ Le fichier `.github/workflows/release.yml` exécute automatiquement à chaque pu
 
 Notes de build :
 - Le bundle Web est généré avec `VITE_BASE=./` afin que les assets fonctionnent sous le sous-chemin GitHub Pages (`/CCTV-Autorisation/`).
-- Flutter est épinglé à `3.47.8` dans le workflow, car Flutter 3.50 déprécie `package:flutter/material.dart` encore utilisé par l'application.
+- Flutter est épinglé à `3.47.8` dans le workflow pour des builds reproductibles (l'application requiert Flutter ≥ 3.47 via `material_ui`).
