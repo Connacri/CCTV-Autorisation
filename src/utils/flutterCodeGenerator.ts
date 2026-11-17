@@ -9,22 +9,25 @@ publish_to: 'none'
 version: 1.2.0+1
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.13.0 <4.0.0'
+  flutter: '>=3.47.0'
 
 dependencies:
   flutter:
     sdk: flutter
+  # Material Design découplé du SDK Flutter (requis dès Flutter 3.47+)
+  material_ui: ^1.11.1
   # Base de données locale ultra-rapide ObjectBox (Historique Lazy List + Listes de choix CRUD)
   objectbox: ^5.3.2
   objectbox_flutter_libs: ^5.3.2
   path_provider: ^2.1.5
   path: ^1.9.0
   # Écriture directe sur le PDF officiel sans modifier sa structure
-  syncfusion_flutter_pdf: ^27.1.58
+  syncfusion_flutter_pdf: ^35.1.46
   # Aperçu et impression multiplateforme
-  printing: ^5.13.4
+  printing: ^5.15.1
   # Police Cairo pour l'interface et le rendu PDF Arabe RTL
-  google_fonts: ^6.2.1
+  google_fonts: ^9.0.0
   file_picker: ^8.1.4
 
 dev_dependencies:
@@ -402,7 +405,7 @@ export function generateFlutterMainDart(
 
   return `import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';

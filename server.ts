@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -28,7 +28,7 @@ const ai = new GoogleGenAI({
 });
 
 // Helper for timeout resilience
-function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 15000): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -118,7 +118,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     hasGeminiKey: Boolean(geminiApiKey),
-    model: 'gemini-3.8-flash',
+    model: 'gemini-4-hydrogen',
     timestamp: new Date().toISOString(),
   });
 });
@@ -183,16 +183,16 @@ Remplis tout le formulaire de manière exemplaire pour la DRAG Oran.`;
 
     const response = await withTimeout(
       ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: [
           { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
         ],
         config: {
           responseMimeType: 'application/json',
-          temperature: 0.2,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         },
       }),
-      5000
+      15000
     );
 
     const text = response.text || '{}';
@@ -321,14 +321,14 @@ Réponds en JSON pur :
 
     const response = await withTimeout(
       ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: [{ role: 'user', parts: [{ text: auditPrompt }] }],
         config: {
           responseMimeType: 'application/json',
-          temperature: 0.1,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         },
       }),
-      5000
+      15000
     );
 
     const parsed = JSON.parse(response.text || '{}');
@@ -394,14 +394,14 @@ Réponds en JSON :
 
     const response = await withTimeout(
       ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: [{ role: 'user', parts: [{ text: fieldPrompt }] }],
         config: {
           responseMimeType: 'application/json',
-          temperature: 0.2,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         },
       }),
-      5000
+      15000
     );
 
     const parsed = JSON.parse(response.text || '{}');
@@ -439,7 +439,7 @@ async function startServer() {
     console.log(`\n======================================================`);
     console.log(`  DRAG Oran CCTV Full-Stack Server Running`);
     console.log(`  URL: http://0.0.0.0:${PORT}`);
-    console.log(`  AI Gemini API: ${geminiApiKey ? 'CONNECTED (Gemini 3.8 Flash)' : 'FALLBACK MODE (No key set)'}`);
+    console.log(`  AI Gemini API: ${geminiApiKey ? 'CONNECTED (Gemini 4 Hydrogen)' : 'FALLBACK MODE (No key set)'}`);
     console.log(`======================================================\n`);
   });
 }
