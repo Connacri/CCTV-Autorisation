@@ -196,10 +196,28 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab ../app-release.aab
           ls -lh ../app-release.apk ../app-release.aab
 
-      - name: Verify APK signing
+      - name: Verify APK & AAB signing
+        env:
+          UPLOAD_CERT_SHA256: ${{ vars.UPLOAD_CERT_SHA256 }}
         run: |
-          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --print-certs ../app-release.apk | head -5 || true
+          BUILD_TOOLS=$(for d in "$ANDROID_HOME"/build-tools/*; do
+            [ -x "$d/apksigner" ] && basename "$d"
+          done | sort -V | tail -1)
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+          "$APKSIGNER" verify --print-certs ../app-release.apk > "$RUNNER_TEMP/apk-certs.txt"
+          head -5 "$RUNNER_TEMP/apk-certs.txt"
+          jarsigner -verify ../app-release.aab > "$RUNNER_TEMP/aab-verify.txt"
+          tail -5 "$RUNNER_TEMP/aab-verify.txt"
+          if [ -n "${UPLOAD_CERT_SHA256}" ]; then
+            ACTUAL=$(grep -m1 'SHA-256 digest' "$RUNNER_TEMP/apk-certs.txt" | awk '{print $NF}')
+            if [ "$ACTUAL" != "$UPLOAD_CERT_SHA256" ]; then
+              echo "::error::APK certificate SHA-256 mismatch (expected $UPLOAD_CERT_SHA256, got $ACTUAL)"
+              exit 1
+            fi
+            echo "APK certificate SHA-256 matches UPLOAD_CERT_SHA256."
+          else
+            echo "::warning::UPLOAD_CERT_SHA256 variable not set; skipping fingerprint comparison."
+          fi
 
       - name: Remove temporary sensitive keystore files (AGENTS.md §14)
         if: always()
