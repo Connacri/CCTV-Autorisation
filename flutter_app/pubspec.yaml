@@ -23,7 +23,12 @@ dependencies:
   printing: ^5.15.1
   # Police Cairo pour l'interface et le rendu PDF Arabe RTL
   google_fonts: ^9.0.0
-  file_picker: ^8.1.4
+  # file_picker 10.x compiles against flutter.compileSdkVersion (36 here) and
+  # ships the Tika XXE fixes (CVE-2025-66516 / CVE-2025-54988). Version 8.x
+  # hardcoded compileSdk 34, which fails AGP metadata checks against
+  # flutter_plugin_android_lifecycle. 11.x switches to static FilePicker
+  # methods, so stay on 10.x to keep the current API.
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:
